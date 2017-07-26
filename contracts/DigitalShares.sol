@@ -40,13 +40,13 @@ contract DigitalShares {
 	}
 
 	function getBalance(address holder) constant returns (int256) {
-		int256 balance = 0;
+		int256 shares = 0;
 		for (uint256 i = 0; i < snapshots.length; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
-			balance += snapshot.getShares(holder);
+			shares += snapshot.getShares(holder);
 		}
-		assert(balance >= 0);
-		return balance;
+		assert(shares >= 0);
+		return shares;
 	}
 
 	function isStock(address stock) constant returns (bool) {
