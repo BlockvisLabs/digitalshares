@@ -15,8 +15,8 @@ contract DigitalShares {
 
 	event DividendsDistributed(uint when, uint256 amount);
 	event FundsReceived(address indexed from, uint256 amount);
-	event SharesSent(address indexed from, address indexed to, int256 amount);
-	event SharesAdded(address indexed to, int256 amount);
+	event SharesSent(address indexed from, address indexed to, uint128 amount);
+	event SharesAdded(address indexed to, uint128 amount);
 
 	function DigitalShares() {
 		owner = msg.sender;
@@ -39,14 +39,14 @@ contract DigitalShares {
 		snapshots.push(new ShareSnapshot(ownerHolder, 0));
 	}
 
-	function getBalance(address holder) constant returns (int256) {
+	function getBalance(address holder) constant returns (uint256) {
 		int256 shares = 0;
 		for (uint256 i = 0; i < snapshots.length; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
 			shares += snapshot.getShares(holder);
 		}
 		assert(shares >= 0);
-		return shares;
+		return uint256(shares);
 	}
 
 	function isStock(address stock) constant returns (bool) {
@@ -62,12 +62,12 @@ contract DigitalShares {
 		return snapshots[snapshots.length - 1];
 	}
 
-	function sendShares(address to, int256 amount) onlyinitialized {
+	function sendShares(address to, uint128 amount) onlyinitialized {
 		require(to != address(0));
 		require(amount > 0);
 
-		int256 balance = getBalance(msg.sender);
-		require(balance >= amount);
+		uint256 shares = getBalance(msg.sender);
+		require(shares >= amount);
 
 		ShareSnapshot snapshot = ShareSnapshot(getLatestSnapshot());
 
@@ -76,7 +76,7 @@ contract DigitalShares {
 		SharesSent(msg.sender, to, amount);
 	}
 
-	function addShare(address to, int256 amount) onlyowner onlyinitialized {
+	function addShare(address to, uint128 amount) onlyowner onlyinitialized {
 		require(to != address(0));
 		require(amount > 0);
 
@@ -123,7 +123,8 @@ contract DigitalShares {
 			shares += snapshot.getShares(msg.sender);
 			assert(shares >= 0);
 			stock += snapshot.getStock(msg.sender);
-			if (snapshot.canPayTo(msg.sender) && stock == 0) {
+			assert(stock >= 0);
+			if (snapshot.canPayTo(msg.sender) && stock == 0 && shares > 0) {
 				snapshot.setPayed(msg.sender, true);
 				payedSnapshots[payedCount] = snapshots[i];
 				payedCount++;
@@ -164,7 +165,7 @@ contract DigitalShares {
 	}
 
 	function getShares() constant returns (uint256) {
-		return uint256(getBalance(msg.sender));
+		return getBalance(msg.sender);
 	}
 
 	function registerStock(address stock) onlyowner onlyinitialized {

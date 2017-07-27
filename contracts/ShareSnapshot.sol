@@ -31,12 +31,12 @@ contract ShareSnapshot {
 		return shares[holder];
 	}
 
-	function sendShares(address from, address to, int256 amount) onlyowner notlocked {
+	function sendShares(address from, address to, uint128 amount) onlyowner notlocked {
 		shares[from] -= amount;
 		shares[to] += amount;
 	}
 
-	function addShares(address to, int256 amount) onlyowner notlocked {
+	function addShares(address to, uint128 amount) onlyowner notlocked {
 		require(amount > 0);
 		totalShares += uint256(amount);
 		shares[to] += amount;

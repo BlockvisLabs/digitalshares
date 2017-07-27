@@ -1,7 +1,7 @@
 var DigitalShares = artifacts.require("./DigitalShares.sol");
 
 contract('DigitalShares', function(accounts) {
-	it('should successful initialize', function() {
+	it('should successfully initialize', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
@@ -13,7 +13,7 @@ contract('DigitalShares', function(accounts) {
 		});
 	});
 
-	it('should successful add shares', function() {
+	it('should successfully add shares', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
@@ -25,7 +25,7 @@ contract('DigitalShares', function(accounts) {
 		});
 	});
 
-	it('should successful send shares', function() {
+	it('should successfully send shares', function() {
 		var contract;
 		var amountToSend = 1000;
 		return DigitalShares.deployed().then(function(instance) {
@@ -43,7 +43,7 @@ contract('DigitalShares', function(accounts) {
 });
 
 contract('DigitalShares distribute', function(accounts) {
-	it('should successful initialize', function() {
+	it('should successfully initialize', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
@@ -74,7 +74,7 @@ contract('DigitalShares distribute', function(accounts) {
 });
 
 contract('DigitalShares massive distribute test', function(accounts) {
-	it('should successful initialize', function() {
+	it('should successfully initialize', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
@@ -83,7 +83,7 @@ contract('DigitalShares massive distribute test', function(accounts) {
 			return contract.addShare(accounts[0], 10000, {from: accounts[0]});
 		});
 	});
-	it('successfully send shares and distribute', function() {
+	it('should successfully send shares and distribute', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
@@ -106,6 +106,19 @@ contract('DigitalShares massive distribute test', function(accounts) {
 			return contract.distributeDividends(web3.toWei(10, 'ether'), {from: accounts[0], gas: 4712388});
 		}).then(function(tx) {
 			console.log(tx);
+		});
+	});
+
+	it('should successfully withdraw', function() {
+		var contract;
+		return DigitalShares.deployed().then(function(instance) {
+			contract = instance;
+			return contract.withdraw({from: accounts[1]});
+		}).then(function(tx) {
+			console.log(tx);
+			return web3.eth.getBalance(accounts[1]);
+		}).then(function(amount) {
+			assert.isAbove(amount, 0);
 		});
 	});
 });
