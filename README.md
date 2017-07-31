@@ -23,5 +23,5 @@ When it is time to distribute profit a new ShareSnapshot is created with empty s
 * D = 0
 
 If we need to get share balance of A, we need to go from the first ShareSnapshot contract to the last one and just summarize share movements. So in our example share balance of A looks like 10 - 5 which equals 5. Share balance of B looks like 10 + 5 which is 15.  
-When the holder comes for his payment he calls `withdraw` method of DigitalShare contract. The DigitalShare contract goes through all stored ShareSnapshot contracts, except the last one, and summarize holders share balance. Each ShareSnapshot contract also holds a `mapping(address => bool)` which stores a fact that the holder have already been payed for this profit distribution.
+When the holder comes for his payment he calls `withdraw` method of DigitalShare contract. The DigitalShare contract goes through all stored ShareSnapshot contracts, except the last one, and summarize holders share balance.
 

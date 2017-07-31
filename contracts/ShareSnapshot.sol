@@ -5,10 +5,9 @@ import "./OwnerHolder.sol";
 contract ShareSnapshot {
 	address ownerHolder;
 	mapping (address => int256) shares;
-	mapping (address => bool) payed;
 	mapping (address => int256) stocks;
 	uint256 public totalShares;
-	uint256 public amountInWei;
+	uint256 amountInWei;
 	bool locked;
 
 	function ShareSnapshot(address ownerHolder_, uint256 totalShares_) {
@@ -16,13 +15,13 @@ contract ShareSnapshot {
 		totalShares = totalShares_;
 	}
 
-	modifier onlyowner() {
+	modifier onlyOwner() {
 		OwnerHolder owner = OwnerHolder(ownerHolder);
 		require(owner.owner() == msg.sender);
 		_;
 	}
 
-	modifier notlocked() {
+	modifier notLocked() {
 		require(locked == false);
 		_;
 	}
@@ -31,27 +30,26 @@ contract ShareSnapshot {
 		return shares[holder];
 	}
 
-	function sendShares(address from, address to, uint128 amount) onlyowner notlocked {
+	function sendShares(address from, address to, uint128 amount) onlyOwner notLocked {
 		shares[from] -= amount;
 		shares[to] += amount;
 	}
 
-	function addShares(address to, uint128 amount) onlyowner notlocked {
-		require(amount > 0);
-		totalShares += uint256(amount);
+	function addShares(address to, uint128 amount) onlyOwner notLocked {
+		totalShares += amount;
 		shares[to] += amount;
 	}
 
-	function lock(uint256 amount) onlyowner notlocked {
+	function lock(uint256 amount) onlyOwner notLocked {
 		amountInWei = amount;
 		locked = true;
 	}
 
-	function registerStock(address stock) onlyowner notlocked {
+	function registerStock(address stock) onlyOwner notLocked {
 		stocks[stock] = 1;
 	}
 
-	function unregisterStock(address stock) onlyowner notlocked {
+	function unregisterStock(address stock) onlyOwner notLocked {
 		stocks[stock] = -1;
 	}
 
@@ -59,13 +57,7 @@ contract ShareSnapshot {
 		return stocks[stock];
 	}
 
-	function setPayed(address holder, bool isPayed) onlyowner {
-		payed[holder] = isPayed;
+	function getData(address _addr) constant returns(int256, int256, uint256, uint256, bool) {
+		return (shares[_addr], stocks[_addr], amountInWei, totalShares, locked);
 	}
-
-	function canPayTo(address holder) constant returns (bool) {
-		return locked == true && payed[holder] == false;
-	}
-
-
 }

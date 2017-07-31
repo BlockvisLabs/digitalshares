@@ -1,4 +1,4 @@
-var SafeMath = artifacts.require("./SafeMath.sol");
+var SafeMath = artifacts.require("zeppelin/SafeMath.sol");
 var DigitalShares = artifacts.require("./DigitalShares.sol");
 
 module.exports = function(deployer) {

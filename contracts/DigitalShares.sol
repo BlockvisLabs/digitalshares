@@ -1,47 +1,44 @@
 pragma solidity ^0.4.11;
 
-import "./SafeMath.sol";
+import "zeppelin/Ownable.sol";
+import "zeppelin/SafeMath.sol";
+import "zeppelin/ReentrancyGuard.sol";
 import "./ShareSnapshot.sol";
 import "./OwnerHolder.sol";
 
-contract DigitalShares {
+contract DigitalShares is Ownable, ReentrancyGuard {
 	using SafeMath for uint256;
-	address public owner;
 
 	address[] snapshots;
 	address ownerHolder;
+	address latestSnapshot;
+	mapping(address => uint256) payed;
 
-	bool initialized;
-
-	event DividendsDistributed(uint when, uint256 amount);
+	event DividendsDistributed(uint256 amount);
 	event FundsReceived(address indexed from, uint256 amount);
 	event SharesSent(address indexed from, address indexed to, uint128 amount);
 	event SharesAdded(address indexed to, uint128 amount);
+	event Payed(uint256 amount);
 
-	function DigitalShares() {
-		owner = msg.sender;
+	modifier onlyInitialized() {
+		if (ownerHolder != address(0)) {
+			_;
+		}
 	}
 
-	modifier onlyowner() {
-		require(msg.sender == owner);
-		_;
-	}
-
-	modifier onlyinitialized() {
-		require(initialized == true);
-		_;
-	}
-
-	function initialize() onlyowner {
-		require(initialized == false);
-		initialized = true;
+	function initialize() onlyOwner {
+		if (ownerHolder != address(0)) {
+			return;
+		}
 		ownerHolder = new OwnerHolder();
-		snapshots.push(new ShareSnapshot(ownerHolder, 0));
+		latestSnapshot = new ShareSnapshot(ownerHolder, 0);
+		snapshots.push(latestSnapshot);
 	}
 
-	function getBalance(address holder) constant returns (uint256) {
+	function getShareBalance(address holder) constant returns (uint256) {
 		int256 shares = 0;
-		for (uint256 i = 0; i < snapshots.length; i++) {
+		uint256 n = snapshots.length;
+		for (uint256 i = 0; i < n; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
 			shares += snapshot.getShares(holder);
 		}
@@ -51,112 +48,118 @@ contract DigitalShares {
 
 	function isStock(address stock) constant returns (bool) {
 		int256 result = 0;
-		for (uint256 i = 0; i < snapshots.length; i++) {
+		uint256 n = snapshots.length;
+		for (uint256 i = 0; i < n; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
 			result += snapshot.getStock(stock);
 		}
 		return result > 0;
 	}
 
-	function getLatestSnapshot() constant returns (address) {
+	function getLatestSnapshot() internal constant returns (address) {
 		return snapshots[snapshots.length - 1];
 	}
 
-	function sendShares(address to, uint128 amount) onlyinitialized {
+	function sendShares(address to, uint128 amount) external onlyInitialized nonReentrant {
 		require(to != address(0));
 		require(amount > 0);
 
-		uint256 shares = getBalance(msg.sender);
-		require(shares >= amount);
+		uint256 shares = getShareBalance(msg.sender);
+		if (shares >= amount) {
+			ShareSnapshot snapshot = ShareSnapshot(latestSnapshot);
+			snapshot.sendShares(msg.sender, to, amount);
 
-		ShareSnapshot snapshot = ShareSnapshot(getLatestSnapshot());
-
-		snapshot.sendShares(msg.sender, to, amount);
-
-		SharesSent(msg.sender, to, amount);
+			SharesSent(msg.sender, to, amount);
+		}
 	}
 
-	function addShare(address to, uint128 amount) onlyowner onlyinitialized {
+	function addShare(address to, uint128 amount) onlyOwner onlyInitialized nonReentrant {
 		require(to != address(0));
 		require(amount > 0);
 
-		ShareSnapshot snapshot = ShareSnapshot(getLatestSnapshot());
+		ShareSnapshot snapshot = ShareSnapshot(latestSnapshot);
 		snapshot.addShares(to, amount);
 
 		SharesAdded(to, amount);
 	}
 
-	function setOwner(address newOwner) onlyowner {
-		require(newOwner != address(0));
-		owner = newOwner;
-	}
-
-	function distributeDividends(uint256 amount) onlyowner onlyinitialized {
+	function distributeDividends(uint256 amount) external onlyOwner onlyInitialized nonReentrant {
 		require(amount > 0);
 		require(amount <= this.balance);
 
-		ShareSnapshot snapshot = ShareSnapshot(getLatestSnapshot());
+		ShareSnapshot snapshot = ShareSnapshot(latestSnapshot);
 		snapshot.lock(amount);
-		snapshots.push(new ShareSnapshot(ownerHolder, snapshot.totalShares()));
-		DividendsDistributed(now, amount);
+		latestSnapshot = new ShareSnapshot(ownerHolder, snapshot.totalShares());
+		snapshots.push(latestSnapshot);
+		DividendsDistributed(amount);
 	}
 
 	/**
 	 * Withdraw all
 	 */
-	function withdraw() onlyinitialized {
-		withdrawUpTo(snapshots.length - 1); // last snapshot is always unlocked
+	function withdraw() external onlyInitialized nonReentrant {
+		performWithdraw(snapshots.length - 1); // last snapshot is always unlocked
 	}
 	/**
 	 * This function withdraws ether up to 'snapshotIndex' snapshot.
 	 * There can be many snapshots and we need to save payout at each snapshot, so we can run out of gas. So this function is needed to partially withdraw funds.
 	 */
-	function withdrawUpTo(uint256 snapshotIndex) onlyinitialized {
+	function withdrawUpTo(uint256 snapshotIndex) external onlyInitialized nonReentrant {
+		performWithdraw(snapshotIndex);
+	}
+
+	function performWithdraw(uint256 snapshotIndex) private {
 		require(snapshotIndex < snapshots.length);
 		uint256 amount = 0;
-		int256 shares = 0;
-		int256 stock = 0;
-		address[] memory payedSnapshots = new address[](snapshots.length);
-		uint256 payedCount = 0;
+		int256 shareBalance = 0;
+		int256 stockBalance = 0;
+		int256 shares;
+		int256 stock;
+		uint256 amountInWei;
+		uint256 totalShares;
+		bool locked;
+		uint256 payedUpToSnapshot = payed[msg.sender];
 		for (uint256 i = 0; i < snapshotIndex; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
-			shares += snapshot.getShares(msg.sender);
-			assert(shares >= 0);
-			stock += snapshot.getStock(msg.sender);
-			assert(stock >= 0);
-			if (snapshot.canPayTo(msg.sender) && stock == 0 && shares > 0) {
-				snapshot.setPayed(msg.sender, true);
-				payedSnapshots[payedCount] = snapshots[i];
-				payedCount++;
-				uint256 snapshotPayout = (uint256(shares) * snapshot.amountInWei()) / snapshot.totalShares();
+			(shares, stock, amountInWei, totalShares, locked) = snapshot.getData(msg.sender);
+			shareBalance += shares;
+			stockBalance += stock;
+			if (i >= payedUpToSnapshot && shareBalance > 0 && stockBalance == 0 && locked) {
+				uint256 snapshotPayout = (uint256(shareBalance) * amountInWei) / totalShares;
 				amount += snapshotPayout;
 			}
 		}
 		assert(amount > 0);
 		assert(amount <= this.balance);
+		payed[msg.sender] = snapshotIndex;
 
 	    if (!msg.sender.send(amount)) {
-	    	for (uint256 j = 0; j < payedCount; j++) {
-	    		ShareSnapshot(payedSnapshots[j]).setPayed(msg.sender, false);
-	    	}
+	    	revert();
+	    } else {
+	    	Payed(amount);
 	    }
 	}
 
 	function getDividends() constant returns (uint256) {
 		uint256 amount = 0;
-		int256 shares = 0;
-		int256 stock = 0;
+		int256 shareBalance = 0;
+		int256 stockBalance = 0;
+		int256 shares;
+		int256 stock;
+		uint256 amountInWei;
+		uint256 totalShares;
+		bool locked;
+		uint256 payedUpToSnapshot = payed[msg.sender];
 		for (uint256 i = 0; i < snapshots.length; i++) {
 			ShareSnapshot snapshot = ShareSnapshot(snapshots[i]);
-			shares += snapshot.getShares(msg.sender);
-			assert(shares >= 0);
-			stock += snapshot.getStock(msg.sender);
-			if (snapshot.canPayTo(msg.sender) && stock == 0) {
-				uint256 snapshotPayout = (uint256(shares) * snapshot.amountInWei()) / snapshot.totalShares();
+			(shares, stock, amountInWei, totalShares, locked) = snapshot.getData(msg.sender);
+			shareBalance += shares;
+			stockBalance += stock;
+			if (i >= payedUpToSnapshot && shareBalance > 0 && stockBalance == 0 && locked) {
+				uint256 snapshotPayout = (uint256(shareBalance) * amountInWei) / totalShares;
 				amount += snapshotPayout;
 			}
 		}
-		assert(amount > 0);
 		return amount;
 	}
 
@@ -165,15 +168,19 @@ contract DigitalShares {
 	}
 
 	function getShares() constant returns (uint256) {
-		return getBalance(msg.sender);
+		return getShareBalance(msg.sender);
 	}
 
-	function registerStock(address stock) onlyowner onlyinitialized {
-		ShareSnapshot(getLatestSnapshot()).registerStock(stock);
+	function registerStock(address stock) onlyOwner onlyInitialized {
+		if (isStock(stock) == false) {
+			ShareSnapshot(latestSnapshot).registerStock(stock);
+		}
 	}
 
-	function unregisterStock(address stock) onlyowner onlyinitialized {
-		ShareSnapshot(getLatestSnapshot()).unregisterStock(stock);
+	function unregisterStock(address stock) onlyOwner onlyInitialized {
+		if (isStock(stock) == true) {
+			ShareSnapshot(latestSnapshot).unregisterStock(stock);
+		}
 	}
 
 	function() payable {

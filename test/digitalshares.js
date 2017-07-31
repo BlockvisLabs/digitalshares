@@ -73,52 +73,79 @@ contract('DigitalShares distribute', function(accounts) {
 	});
 });
 
-contract('DigitalShares massive distribute test', function(accounts) {
-	it('should successfully initialize', function() {
+
+contract('DigitalShares sequential withdraw', function(accounts) {
+	it('initialize', function() {
+		return DigitalShares.deployed().then(function(instance) {
+			return instance.initialize();
+		});
+	});
+
+	it('add,share,send,distribute', function() {
+		var contract;
+		return DigitalShares.deployed().then(function(instance) {
+			contract = instance;
+			return instance.addShare(accounts[0], 10000, {from: accounts[0]});
+		}).then(function() {
+			return contract.sendShares(accounts[1], 5000, {from: accounts[0]});
+		}).then(function() {
+			return contract.send(web3.toWei(10, 'ether'));
+		}).then(function() {
+			return contract.distributeDividends(web3.toWei(1, 'ether'), {from: accounts[0]});
+		}).then(function() {
+			return web3.eth.getBalance(accounts[1]);
+		}).then(function(balance) {
+			console.log('Before: ' + web3.fromWei(balance.toNumber(), 'ether'));
+			return contract.withdraw({from: accounts[1]});
+		}).then(function() {
+			return web3.eth.getBalance(accounts[1]);
+		}).then(function(balance) {
+			console.log('After 1: ' + web3.fromWei(balance.toNumber(), 'ether'));
+			return contract.distributeDividends(web3.toWei(1, 'ether'), {from: accounts[0]});
+		}).then(function() {
+			return contract.withdraw({from: accounts[1]});
+		}).then(function() {
+			return web3.eth.getBalance(accounts[1]);
+		}).then(function(balance) {
+			console.log('After 2: ' + web3.fromWei(balance.toNumber(), 'ether'));
+		});
+	});
+});
+
+
+contract('DigitalShares stats', function(accounts) {
+	it('initialize', function() {
 		var contract;
 		return DigitalShares.deployed().then(function(instance) {
 			contract = instance;
 			return contract.initialize();
-		}).then(function() {
+		}).then(function(tx) {
 			return contract.addShare(accounts[0], 10000, {from: accounts[0]});
-		});
-	});
-	it('should successfully send shares and distribute', function() {
-		var contract;
-		return DigitalShares.deployed().then(function(instance) {
-			contract = instance;
-			return contract.sendTransaction({ from: accounts[0], to: contract.address, value: web3.toWei(10, 'ether') });
 		}).then(function() {
-			var promise = new Promise(function(resolve, reject) {
-				resolve();
-			});
-			for (var i = 1; i < accounts.length; i++) {
-				(function(index) {
-					promise = promise.then(function() {
-						return contract.sendShares(accounts[index], 10, {from: accounts[0], gas: 4712388});
-					});
-				})(i);
-			}
-			console.log('Sending shares to ' + accounts.length + ' accounts');
-			return promise;
-		}).then(function(holders) {
-			console.log('Distributing...');
-			return contract.distributeDividends(web3.toWei(10, 'ether'), {from: accounts[0], gas: 4712388});
+			return contract.sendShares(accounts[1], 5000, {from: accounts[0]});
 		}).then(function(tx) {
-			console.log(tx);
-		});
-	});
-
-	it('should successfully withdraw', function() {
-		var contract;
-		return DigitalShares.deployed().then(function(instance) {
-			contract = instance;
-			return contract.withdraw({from: accounts[1]});
+			return contract.send(web3.toWei(10, 'ether'));
+		}).then(function() {
+            var promise = new Promise(function(resolve, reject) {
+                resolve();
+            });
+            for (var i = 0; i < 100; i++) {
+                (function(index) {
+                    promise = promise.then(function() {
+                        return contract.distributeDividends(web3.toWei(0.001, 'ether'), {from: accounts[0]});
+                    });
+                })(i);
+            }
+            return promise;
+		}).then(function() {
+			return contract.withdraw({from: accounts[1], gas: 4712388});
 		}).then(function(tx) {
+			console.log('withdraw');
 			console.log(tx);
-			return web3.eth.getBalance(accounts[1]);
-		}).then(function(amount) {
-			assert.isAbove(amount, 0);
+			return contract.sendShares(accounts[1], 1000, {from: accounts[0], gas: 4712388});
+		}).then(function(tx) {
+			console.log('sendShares');
+			console.log(tx);
 		});
 	});
 });
