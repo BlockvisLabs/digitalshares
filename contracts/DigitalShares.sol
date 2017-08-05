@@ -2,9 +2,8 @@ pragma solidity ^0.4.13;
 
 import "zeppelin/Ownable.sol";
 import "zeppelin/SafeMath.sol";
-import "zeppelin/ReentrancyGuard.sol";
 
-contract DigitalShares is Ownable, ReentrancyGuard {
+contract DigitalShares is Ownable {
 	using SafeMath for uint256;
 
 	struct Snapshot {
@@ -31,7 +30,7 @@ contract DigitalShares is Ownable, ReentrancyGuard {
 		balance[tx.origin] = _totalShares;
 	}
 
-	function transferShares(address _to, uint128 _amount) external nonReentrant returns (bool) {
+	function transferShares(address _to, uint128 _amount) external returns (bool) {
 		require(_to != address(0));
 		require(_amount > 0);
 
@@ -49,7 +48,7 @@ contract DigitalShares is Ownable, ReentrancyGuard {
 		}
 	}
 
-	function distribute(uint256 _amount) external onlyOwner nonReentrant {
+	function distribute(uint256 _amount) external onlyOwner {
 		require(_amount > 0);
 		require(_amount <= this.balance);
 
@@ -62,14 +61,14 @@ contract DigitalShares is Ownable, ReentrancyGuard {
 	/**
 	 * Withdraw all
 	 */
-	function withdraw() external nonReentrant returns (bool) {
+	function withdraw() external returns (bool) {
 		return performWithdraw(snapshots.length - 1);
 	}
 	/**
 	 * This function withdraws ether up to 'snapshotIndex' snapshot.
 	 * There can be many snapshots and we need to save payout at each snapshot, so we can run out of gas. So this function is needed to partially withdraw funds.
 	 */
-	function withdrawUpTo(uint256 _snapshotIndex) external nonReentrant returns (bool) {
+	function withdrawUpTo(uint256 _snapshotIndex) external returns (bool) {
 		require(_snapshotIndex < snapshots.length - 1);
 		performWithdraw(_snapshotIndex);
 	}
