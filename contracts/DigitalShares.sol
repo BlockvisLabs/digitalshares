@@ -12,9 +12,11 @@ contract DigitalShares is Ownable {
 	}
 	Snapshot[] snapshots;
 	uint256 totalShares;
+	uint256 undistributed;
 	mapping(address => uint256) balance;
 	mapping(address => uint256) payed;
 	mapping(address => uint256) unpayedWei;
+
 
 	event DividendsDistributed(uint256 amount);
 	event FundsReceived(address indexed from, uint256 amount);
@@ -50,12 +52,17 @@ contract DigitalShares is Ownable {
 
 	function distribute(uint256 _amount) external onlyOwner {
 		require(_amount > 0);
-		require(_amount <= this.balance);
+		require(_amount <= getDistributionBalance());
 
 		Snapshot storage snapshot = snapshots[snapshots.length - 1];
 		snapshot.amountInWei = _amount;
 		snapshots.push(Snapshot({ amountInWei: 0}));
+		undistributed = undistributed.add(_amount);
 		DividendsDistributed(_amount);
+	}
+	
+	function getDistributionBalance() constant returns (uint256) {
+	    return this.balance.sub(undistributed);
 	}
 
 	/**
@@ -80,6 +87,7 @@ contract DigitalShares is Ownable {
 			unpayedWei[msg.sender] = divider % totalShares;
 			assert(amount <= this.balance);
 			payed[msg.sender] = _snapshotIndex;
+			undistributed = undistributed.sub(amount);
 		    if (msg.sender.send(amount)) {
 		    	Payed(amount);
 		    } else {
