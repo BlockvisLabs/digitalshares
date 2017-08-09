@@ -53,7 +53,7 @@ contract DigitalShares is Ownable {
 	function distribute(uint256 _amount) external onlyOwner {
 		require(_amount > 0);
 
-		if (_amount <= getDistributionBalance()) {
+		if (_amount <= this.balance.sub(reserved)) {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
 			snapshot.amountInWei = _amount;
 			snapshots.push(Snapshot({ amountInWei: 0}));
