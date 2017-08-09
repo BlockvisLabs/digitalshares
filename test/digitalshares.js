@@ -317,7 +317,7 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 
 		var contractBalance = await web3.eth.getBalance(contract.address);
 		assert.equal(contractBalance.toNumber(), 1, 'contract should have 1 wei left');
-		var undistributed = await contract.getUndistributed.call();
+		var undistributed = await contract.getReserved.call();
 		assert.equal(undistributed.toNumber(), 1, 'contract should have 1 wei undistributed');
 	});
 

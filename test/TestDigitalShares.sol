@@ -33,7 +33,7 @@ contract TestDigitalShares is DigitalShares {
 		return unpayedWei[holder];
 	}
 
-	function getUndistributed() constant returns (uint256) {
-		return undistributed;
+	function getReserved() constant returns (uint256) {
+		return reserved;
 	}
 }

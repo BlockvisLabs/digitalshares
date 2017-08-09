@@ -12,7 +12,7 @@ contract DigitalShares is Ownable {
 	}
 	Snapshot[] snapshots;
 	uint256 totalShares;
-	uint256 undistributed;
+	uint256 reserved;
 	mapping(address => uint128) balance;
 	mapping(address => uint256) payed;
 	mapping(address => uint256) unpayedWei;
@@ -57,13 +57,13 @@ contract DigitalShares is Ownable {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
 			snapshot.amountInWei = _amount;
 			snapshots.push(Snapshot({ amountInWei: 0}));
-			undistributed = undistributed.add(_amount);
+			reserved = reserved.add(_amount);
 			Distributed(_amount);
 		}
 	}
 
 	function getDistributionBalance() constant returns (uint256) {
-	    return this.balance.sub(undistributed);
+	    return this.balance.sub(reserved);
 	}
 
 	/**
@@ -102,7 +102,7 @@ contract DigitalShares is Ownable {
 			assert(amount <= this.balance);
 
 			payed[msg.sender] = _snapshotIndex;
-			undistributed = undistributed.sub(amount);
+			reserved = reserved.sub(amount);
 		    if (msg.sender.send(amount)) {
 		    	Payed(amount);
 		    } else {
