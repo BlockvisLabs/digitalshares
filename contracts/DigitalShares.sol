@@ -13,18 +13,18 @@ contract DigitalShares is Ownable {
 	Snapshot[] snapshots;
 	uint256 totalShares;
 	uint256 undistributed;
-	mapping(address => uint256) balance;
+	mapping(address => uint128) balance;
 	mapping(address => uint256) payed;
 	mapping(address => uint256) unpayedWei;
 
-
-	event DividendsDistributed(uint256 amount);
+	event Distributed(uint256 amount);
 	event FundsReceived(address indexed from, uint256 amount);
 	event SharesSent(address indexed from, address indexed to, uint128 amount);
 	event Payed(uint256 amount);
 
 	function DigitalShares(uint128 _totalShares) {
 		require(_totalShares > 0);
+		require(_totalShares <= 0xffffffffffffffffffffffffffffffff);
 		totalShares = _totalShares;
 		snapshots.push(Snapshot({amountInWei: 0}));
 		Snapshot storage snapshot = snapshots[snapshots.length - 1];
@@ -33,8 +33,8 @@ contract DigitalShares is Ownable {
 	}
 
 	function transferShares(address _to, uint128 _amount) external returns (bool) {
-		require(_to != address(0));
-		require(_amount > 0);
+		if (_to == address(0)) return false;
+		if (_amount == 0) return false;
 
 		uint256 shares = balance[msg.sender];
 		if (shares >= _amount) {
@@ -52,15 +52,16 @@ contract DigitalShares is Ownable {
 
 	function distribute(uint256 _amount) external onlyOwner {
 		require(_amount > 0);
-		require(_amount <= getDistributionBalance());
 
-		Snapshot storage snapshot = snapshots[snapshots.length - 1];
-		snapshot.amountInWei = _amount;
-		snapshots.push(Snapshot({ amountInWei: 0}));
-		undistributed = undistributed.add(_amount);
-		DividendsDistributed(_amount);
+		if (_amount <= getDistributionBalance()) {
+			Snapshot storage snapshot = snapshots[snapshots.length - 1];
+			snapshot.amountInWei = _amount;
+			snapshots.push(Snapshot({ amountInWei: 0}));
+			undistributed = undistributed.add(_amount);
+			Distributed(_amount);
+		}
 	}
-	
+
 	function getDistributionBalance() constant returns (uint256) {
 	    return this.balance.sub(undistributed);
 	}
@@ -76,16 +77,30 @@ contract DigitalShares is Ownable {
 	 * There can be many snapshots and we need to save payout at each snapshot, so we can run out of gas. So this function is needed to partially withdraw funds.
 	 */
 	function withdrawUpTo(uint256 _snapshotIndex) external returns (bool) {
-		require(_snapshotIndex < snapshots.length - 1);
+		require(_snapshotIndex <= snapshots.length - 1);
 		performWithdraw(_snapshotIndex);
 	}
 
 	function performWithdraw(uint256 _snapshotIndex) internal returns (bool) {
-		uint256 divider = multiply(msg.sender, _snapshotIndex) + unpayedWei[msg.sender];
-		if (divider > 0) {
-			uint256 amount = divider / totalShares;
-			unpayedWei[msg.sender] = divider % totalShares;
+		uint256 numerator = 0;
+		int256 shares = 0;
+		for (uint256 i = payed[msg.sender]; i < _snapshotIndex; i++) {
+			Snapshot storage snapshot = snapshots[i];
+			shares += snapshot.shares[msg.sender];
+			if (shares > 0) { // just to be sure we can cast to uint256
+				numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
+			}
+			snapshot.shares[msg.sender] = 0;
+		}
+		snapshots[_snapshotIndex].shares[msg.sender] += shares;
+
+		numerator = numerator.add(unpayedWei[msg.sender]);
+		if (numerator > 0) {
+			uint256 amount = numerator / totalShares;
+			unpayedWei[msg.sender] = numerator % totalShares;
+
 			assert(amount <= this.balance);
+
 			payed[msg.sender] = _snapshotIndex;
 			undistributed = undistributed.sub(amount);
 		    if (msg.sender.send(amount)) {
@@ -96,31 +111,25 @@ contract DigitalShares is Ownable {
 		}
 	}
 
-	function multiply(address _holder, uint256 _toIndex) constant private returns (uint256) {
-		uint256 payedUpTo = payed[_holder];
-		uint256 result = 0;
+	function getDividends() constant returns (uint256) {
+		uint256 numerator = 0;
 		int256 shares = 0;
-		for (uint256 i = 0; i < _toIndex; i++) {
+		for (uint256 i = payed[msg.sender]; i < snapshots.length - 1; i++) {
 			Snapshot storage snapshot = snapshots[i];
-			shares += snapshot.shares[_holder];
-			if (i >= payedUpTo && shares > 0) {
-				result += (snapshot.amountInWei * uint256(shares));
+			shares += snapshot.shares[msg.sender];
+			if (shares > 0) {
+				numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
 			}
 		}
-		return result;
-	}
-
-	function getDividends() constant returns (uint256) {
-		uint256 divider = multiply(msg.sender, snapshots.length - 1) + unpayedWei[msg.sender];
-		uint256 amount = divider / totalShares;
-		return amount;
+		numerator = numerator.add(unpayedWei[msg.sender]);
+		return numerator / totalShares;
 	}
 
 	function getSnapshotCount() constant returns (uint256) {
 		return snapshots.length;
 	}
 
-	function getShares() constant returns (uint256) {
+	function getShares() constant returns (uint128) {
 		return balance[msg.sender];
 	}
 
