@@ -34,6 +34,6 @@ contract TestDigitalShares is DigitalShares {
 	}
 
 	function getReserved() constant returns (uint256) {
-		return reserved;
+		return reservedWei;
 	}
 }

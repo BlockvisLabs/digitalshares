@@ -11,7 +11,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('should successfully create contract', async function() {
-		var shares = await contract.getShares.call();
+		var shares = await contract.balanceOf.call(accountOne);
 		var snapshotCount = await contract.getSnapshotCount.call();
 
 		assert.equal(shares.toNumber(), 10000, 'account should have 10000 shares');
@@ -19,25 +19,27 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('should successfully send shares', async function() {
-		var tx = await contract.transferShares(accountTwo, 1000, {from: accountOne});
+		var tx = await contract.transfer(accountTwo, 1000, {from: accountOne});
 
-		var accountOneBalance = await contract.getShares.call();
-		var accountTwoBalance = await contract.getShares.call({from: accountTwo});
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
+		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.equal(accountOneBalance.toNumber(), 9000, 'Owner should have 9000 shares');
 		assert.equal(accountTwoBalance.toNumber(), 1000, 'Account 2 should have 1000 shares');
 	});
 
 	it('should not send more shares than actually have', async function() {
-		var tx = await contract.transferShares(accountTwo, 10001, {from: accountOne});
+		try {
+			var tx = await contract.transfer(accountTwo, 10001, {from: accountOne});
+		} catch(e) {} // testrpc throws 'invalid opcode' on assert()
 
-		var accountOneBalance = await contract.getShares.call({from: accountOne});
-		var accountTwoBalance = await contract.getShares.call({from: accountTwo});
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
+		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.equal(accountOneBalance.toNumber(), 10000, 'Owner should have 10000 shares');
 		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have 0 shares');
 	});
 
 	it('should distribute dividends', async function() {
-		await contract.transferShares(accountTwo, 1000, {from: accountOne});
+		await contract.transfer(accountTwo, 1000, {from: accountOne});
 		await contract.distribute(web3.toWei(10, 'ether'), {from: accountOne});
 		var accountOneAmount = await contract.getDividends.call();
 		var accountTwoAmount = await contract.getDividends.call({from: accountTwo});
@@ -53,14 +55,14 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> no distribute', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 
 		var balanceBefore = await contract.getDividends.call({from: accountOne});
 		assert.equal(balanceBefore.toNumber(), 0, 'should be no dividends before distribution');
 	});
 
 	it('transfer -> distribute', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var balanceBeforeOne = await contract.getDividends.call({from: accountOne});
 		var balanceBeforeTwo = await contract.getDividends.call({from: accountTwo});
 		await contract.distribute(web3.toWei(1, 'ether'), {from: accountOne});
@@ -72,7 +74,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> distribute -> distribute', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var balanceBeforeOne = await contract.getDividends.call({from: accountOne});
 		var balanceBeforeTwo = await contract.getDividends.call({from: accountTwo});
 		await contract.distribute(web3.toWei(1, 'ether'), {from: accountOne});
@@ -93,7 +95,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> withdraw', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var accountOneBalanceBefore = await web3.eth.getBalance(accountOne);
 		var tx = await contract.withdraw({from: accountOne});
 
@@ -102,7 +104,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> distribute -> withdraw', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
 		await contract.distribute(web3.toWei(1, 'ether'));
 		var tx = await contract.withdraw({from: accountTwo});
@@ -114,7 +116,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> distribute -> distribute -> withdraw', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
 		await contract.distribute(web3.toWei(1, 'ether'));
 		await contract.distribute(web3.toWei(1, 'ether'));
@@ -127,7 +129,7 @@ contract('DigitalShares', async function(accounts) {
 	});
 
 	it('transfer -> distribute -> withdraw -> withdraw', async function() {
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
 		await contract.distribute(web3.toWei(1, 'ether'));
 		var tx = await contract.withdraw({from: accountTwo});
@@ -144,9 +146,9 @@ contract('DigitalShares', async function(accounts) {
 
 	it('transfer -> distribute -> transfer -> distribute', async function() {
 		var accountThree = accounts[2];
-		await contract.transferShares(accountTwo, 5000, {from: accountOne});
+		await contract.transfer(accountTwo, 5000, {from: accountOne});
 		await contract.distribute(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountThree, 5000, {from: accountTwo});
+		await contract.transfer(accountThree, 5000, {from: accountTwo});
 		await contract.distribute(web3.toWei(1, 'ether'));
 
 		var accountOneBalance = await contract.getDividends.call({ from: accountOne });
@@ -160,7 +162,7 @@ contract('DigitalShares', async function(accounts) {
 	it('after distribute->transfer cycle snapshot must hold data ', async function() {
 		for (var i = 0; i < 3; i++) {
 			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transferShares(accountTwo, 10, {from: accountOne});
+			await contract.transfer(accountTwo, 10, {from: accountOne});
 
 			var snapshotShares = await contract.getShapshotShares(i, { from: accountOne });
 			assert.notEqual(snapshotShares, 0, 'shares must not be equal to 0');
@@ -170,7 +172,7 @@ contract('DigitalShares', async function(accounts) {
 	it('after withdraw snapshot shares becomes 0', async function() {
 		for (var i = 0; i < 3; i++) {
 			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transferShares(accountTwo, 10, {from: accountOne});
+			await contract.transfer(accountTwo, 10, {from: accountOne});
 		}
 
 		await contract.withdraw({from: accountOne});
@@ -184,7 +186,7 @@ contract('DigitalShares', async function(accounts) {
 	it('after withdraw last snapshot holds all balance', async function() {
 		for (var i = 0; i < 3; i++) {
 			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transferShares(accountTwo, 10, {from: accountOne});
+			await contract.transfer(accountTwo, 10, {from: accountOne});
 		}
 
 		await contract.withdraw({from: accountOne});
@@ -199,7 +201,7 @@ contract('DigitalShares', async function(accounts) {
 		var upToSnapshot = 3;
 		for (var i = 0; i < 5; i++) {
 			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transferShares(accountTwo, 10, {from: accountOne});
+			await contract.transfer(accountTwo, 10, {from: accountOne});
 		}
 
 		await contract.withdrawUpTo(upToSnapshot, {from: accountOne});
@@ -215,7 +217,7 @@ contract('DigitalShares', async function(accounts) {
 
 		for (var i = 0; i < 5; i++) {
 			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transferShares(accountTwo, 10, {from: accountOne});
+			await contract.transfer(accountTwo, 10, {from: accountOne});
 		}
 
 		await contract.withdrawUpTo(upToSnapshot, {from: accountOne});
@@ -233,8 +235,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('transfer -> distribute', async function() {
 		var	contract = await TestDigitalShares.new(10);
 		await contract.send(10);
-		await contract.transferShares(accountTwo, 	3, {from: accountOne});
-		await contract.transferShares(accountThree, 2, {from: accountOne});
+		await contract.transfer(accountTwo, 	3, {from: accountOne});
+		await contract.transfer(accountThree, 2, {from: accountOne});
 		for (var i = 0; i < 5; i++) {
 			await contract.distribute(1);
 		}
@@ -261,8 +263,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('transfer -> distribute -> withdraw -> distribute -> withdraw', async function() {
 		var	contract = await TestDigitalShares.new(10);
 		await contract.send(10);
-		await contract.transferShares(accountTwo, 	3, {from: accountOne});
-		await contract.transferShares(accountThree, 2, {from: accountOne});
+		await contract.transfer(accountTwo, 	3, {from: accountOne});
+		await contract.transfer(accountThree, 2, {from: accountOne});
 		for (var i = 0; i < 5; i++) {
 			await contract.distribute(1);
 		}
@@ -306,8 +308,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('undistributed', async function() {
 		var contract = await TestDigitalShares.new(30);
 		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountTwo, 10, {from: accountOne});
-		await contract.transferShares(accountThree, 10, {from: accountOne});
+		await contract.transfer(accountTwo, 10, {from: accountOne});
+		await contract.transfer(accountThree, 10, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1, 'ether'));
 
@@ -324,8 +326,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('unpayed 30', async function() {
 		var contract = await TestDigitalShares.new(30);
 		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountTwo, 10, {from: accountOne});
-		await contract.transferShares(accountThree, 10, {from: accountOne});
+		await contract.transfer(accountTwo, 10, {from: accountOne});
+		await contract.transfer(accountThree, 10, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1, 'ether'));
 
@@ -345,8 +347,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('unpayed 99', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountTwo, 10, {from: accountOne});
-		await contract.transferShares(accountThree, 33, {from: accountOne});
+		await contract.transfer(accountTwo, 10, {from: accountOne});
+		await contract.transfer(accountThree, 33, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1, 'ether'));
 
@@ -366,8 +368,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('unpayed 99 with 1.3333 ether', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(1.3333, 'ether'));
-		await contract.transferShares(accountTwo, 10, {from: accountOne});
-		await contract.transferShares(accountThree, 33, {from: accountOne});
+		await contract.transfer(accountTwo, 10, {from: accountOne});
+		await contract.transfer(accountThree, 33, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1.3333, 'ether'));
 
@@ -390,8 +392,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('unpayed 99 with 4.687411 ether', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(4.687411, 'ether'));
-		await contract.transferShares(accountTwo, 10, {from: accountOne});
-		await contract.transferShares(accountThree, 33, {from: accountOne});
+		await contract.transfer(accountTwo, 10, {from: accountOne});
+		await contract.transfer(accountThree, 33, {from: accountOne});
 
 		await contract.distribute(web3.toWei(4.687411, 'ether'));
 
@@ -414,8 +416,8 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	it('unpayed 999 with 1.1 ether', async function() {
 		var contract = await TestDigitalShares.new(999);
 		await contract.send(web3.toWei(1.1, 'ether'));
-		await contract.transferShares(accountTwo, 111, {from: accountOne});
-		await contract.transferShares(accountThree, 333, {from: accountOne});
+		await contract.transfer(accountTwo, 111, {from: accountOne});
+		await contract.transfer(accountThree, 333, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1.1, 'ether'));
 
@@ -447,14 +449,14 @@ contract('DigitalShares uint128 max', async function(accounts) {
 	});
 
 	it('should successfully create contract with max uint128', async function() {
-		var accountOneBalance = await contract.getShares.call({ from: accountOne });
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
 		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have max uint128 shares');
 	});
 
 	it('should successfully send max uint128 shares', async function() {
-		await contract.transferShares(accountTwo, uint128Max, {from: accountOne});
-		var accountOneBalance = await contract.getShares.call();
-		var accountTwoBalance = await contract.getShares.call({from: accountTwo});
+		await contract.transfer(accountTwo, uint128Max, {from: accountOne});
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
+		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.equal(accountOneBalance.toNumber(), 0, 'Owner should have 0 shares');
 		assert.isTrue(accountTwoBalance.equals(uint128Max), 'Account 2 should have uint128 max shares');
 	});
@@ -463,12 +465,12 @@ contract('DigitalShares uint128 max', async function(accounts) {
 		var transferAmount = uint128Max;
 
 		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountTwo, transferAmount, {from: accountOne});
+		await contract.transfer(accountTwo, transferAmount, {from: accountOne});
 		await contract.distribute(web3.toWei(1, 'ether'));
-		await contract.transferShares(accountOne, transferAmount, {from: accountTwo});
+		await contract.transfer(accountOne, transferAmount, {from: accountTwo});
 
-		var accountOneBalance = await contract.getShares.call({from: accountOne});
-		var accountTwoBalance = await contract.getShares.call({from: accountTwo});
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
+		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have uint128 max shares');
 		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have no shares');
 
@@ -481,9 +483,9 @@ contract('DigitalShares uint128 max', async function(accounts) {
 	it('should not send shares more than actually have', async function() {
 		var transferAmount = uint128Max.plus(1);
 
-		await contract.transferShares(accountTwo, transferAmount, {from: accountOne});
-		var accountOneBalance = await contract.getShares.call({from: accountOne});
-		var accountTwoBalance = await contract.getShares.call({from: accountTwo});
+		await contract.transfer(accountTwo, transferAmount, {from: accountOne});
+		var accountOneBalance = await contract.balanceOf.call(accountOne);
+		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have uint128 max shares');
 		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have 0 shares');
 	});

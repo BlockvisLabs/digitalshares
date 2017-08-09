@@ -2,68 +2,72 @@ pragma solidity ^0.4.13;
 
 import "zeppelin/Ownable.sol";
 import "zeppelin/SafeMath.sol";
+import "zeppelin/StandardToken.sol";
 
-contract DigitalShares is Ownable {
+contract DigitalShares is Ownable, StandardToken {
 	using SafeMath for uint256;
 
 	struct Snapshot {
 		mapping (address => int256) shares;
 		uint256 amountInWei;
 	}
+	uint256 reservedWei;
 	Snapshot[] snapshots;
-	uint256 totalShares;
-	uint256 reserved;
-	mapping(address => uint128) balance;
 	mapping(address => uint256) payed;
 	mapping(address => uint256) unpayedWei;
 
 	event Distributed(uint256 amount);
 	event FundsReceived(address indexed from, uint256 amount);
-	event SharesSent(address indexed from, address indexed to, uint128 amount);
 	event Payed(uint256 amount);
 
-	function DigitalShares(uint128 _totalShares) {
-		require(_totalShares > 0);
-		require(_totalShares <= 0xffffffffffffffffffffffffffffffff);
-		totalShares = _totalShares;
+	function DigitalShares(uint128 _totalSupply) {
+		require(_totalSupply > 0);
+		require(_totalSupply <= 0xffffffffffffffffffffffffffffffff);
+		totalSupply = _totalSupply;
+		balances[tx.origin] = _totalSupply;
 		snapshots.push(Snapshot({amountInWei: 0}));
 		Snapshot storage snapshot = snapshots[snapshots.length - 1];
-		snapshot.shares[tx.origin] = _totalShares;
-		balance[tx.origin] = _totalShares;
+		snapshot.shares[tx.origin] = _totalSupply;
 	}
 
-	function transferShares(address _to, uint128 _amount) external returns (bool) {
+	function transfer(address _to, uint256 _value) returns (bool) {
 		if (_to == address(0)) return false;
-		if (_amount == 0) return false;
+		if (_value == 0) return false;
+		if (_value > 0xffffffffffffffffffffffffffffffff) return false;
 
-		uint256 shares = balance[msg.sender];
-		if (shares >= _amount) {
+		if (super.transfer(_to, _value)) {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
-			snapshot.shares[msg.sender] -= _amount;
-			balance[msg.sender] -= _amount;
-			snapshot.shares[_to] += _amount;
-			balance[_to] += _amount;
-			SharesSent(msg.sender, _to, _amount);
+			snapshot.shares[msg.sender] -= uint128(_value);
+			snapshot.shares[_to] += uint128(_value);
 			return true;
-		} else {
+		}
+		else {
 			return false;
+		}
+	}
+
+	function transferFrom(address from, address to, uint256 value) returns (bool) {
+		if (super.transferFrom(from, to, value)) {
+			Snapshot storage snapshot = snapshots[snapshots.length - 1];
+			snapshot.shares[from] -= uint128(value);
+			snapshot.shares[to] += uint128(value);
 		}
 	}
 
 	function distribute(uint256 _amount) external onlyOwner {
 		require(_amount > 0);
 
-		if (_amount <= this.balance.sub(reserved)) {
+		if (_amount <= this.balance.sub(reservedWei)) {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
 			snapshot.amountInWei = _amount;
 			snapshots.push(Snapshot({ amountInWei: 0}));
-			reserved = reserved.add(_amount);
+			reservedWei = reservedWei.add(_amount);
 			Distributed(_amount);
 		}
 	}
 
 	function getDistributionBalance() constant returns (uint256) {
-	    return this.balance.sub(reserved);
+	    return this.balance.sub(reservedWei);
 	}
 
 	/**
@@ -96,13 +100,13 @@ contract DigitalShares is Ownable {
 
 		numerator = numerator.add(unpayedWei[msg.sender]);
 		if (numerator > 0) {
-			uint256 amount = numerator / totalShares;
-			unpayedWei[msg.sender] = numerator % totalShares;
+			uint256 amount = numerator / totalSupply;
+			unpayedWei[msg.sender] = numerator % totalSupply;
 
 			assert(amount <= this.balance);
 
 			payed[msg.sender] = _snapshotIndex;
-			reserved = reserved.sub(amount);
+			reservedWei = reservedWei.sub(amount);
 		    if (msg.sender.send(amount)) {
 		    	Payed(amount);
 		    } else {
@@ -122,15 +126,11 @@ contract DigitalShares is Ownable {
 			}
 		}
 		numerator = numerator.add(unpayedWei[msg.sender]);
-		return numerator / totalShares;
+		return numerator / totalSupply;
 	}
 
 	function getSnapshotCount() constant returns (uint256) {
 		return snapshots.length;
-	}
-
-	function getShares() constant returns (uint128) {
-		return balance[msg.sender];
 	}
 
 	function() payable {
