@@ -1,28 +1,30 @@
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.15;
 
 import "../contracts/DigitalShares.sol";
 
 contract TestDigitalShares is DigitalShares {
 
-	function TestDigitalShares(uint128 _totalShares) DigitalShares(_totalShares) {
+	function TestDigitalShares(uint256 _totalShares) DigitalShares(_totalShares) {
 	}
 
-	function getCalculatedShares() constant returns (uint128) {
+	function getCalculatedShares() constant returns (uint256) {
 		int256 shares = 0;
 		for (uint256 i = 0; i < snapshots.length; i++) {
 			Snapshot storage snapshot = snapshots[i];
 			shares += snapshot.shares[msg.sender];
 		}
-		return uint128(shares);
+		assert(shares >= 0);
+		return uint256(shares);
 	}
 
-	function getCalculatedSharesUsingPayed() constant returns (uint128) {
+	function getCalculatedSharesUsingPayed() constant returns (uint256) {
 		int256 shares = 0;
 		for (uint256 i = payed[msg.sender]; i < snapshots.length; i++) {
 			Snapshot storage snapshot = snapshots[i];
 			shares += snapshot.shares[msg.sender];
 		}
-		return uint128(shares);
+		assert(shares >= 0);
+		return uint256(shares);
 	}
 
 	function getShapshotShares(uint index) constant returns (int256) {

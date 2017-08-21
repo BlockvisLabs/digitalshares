@@ -1,4 +1,4 @@
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.15;
 
 import "zeppelin/Ownable.sol";
 import "zeppelin/SafeMath.sol";
@@ -6,6 +6,8 @@ import "zeppelin/StandardToken.sol";
 
 contract DigitalShares is Ownable, StandardToken {
 	using SafeMath for uint256;
+
+	uint256 constant MAX_INT256 = uint256(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
 
 	struct Snapshot {
 		mapping (address => int256) shares;
@@ -20,25 +22,25 @@ contract DigitalShares is Ownable, StandardToken {
 	event FundsReceived(address indexed from, uint256 amount);
 	event Payed(uint256 amount);
 
-	function DigitalShares(uint128 _totalSupply) {
+	function DigitalShares(uint256 _totalSupply) {
 		require(_totalSupply > 0);
-		require(_totalSupply <= 0xffffffffffffffffffffffffffffffff);
+		require(_totalSupply <= MAX_INT256);
 		totalSupply = _totalSupply;
 		balances[tx.origin] = _totalSupply;
 		snapshots.push(Snapshot({amountInWei: 0}));
 		Snapshot storage snapshot = snapshots[snapshots.length - 1];
-		snapshot.shares[tx.origin] = _totalSupply;
+		snapshot.shares[tx.origin] = int256(_totalSupply);
 	}
 
 	function transfer(address _to, uint256 _value) returns (bool) {
 		if (_to == address(0)) return false;
 		if (_value == 0) return false;
-		if (_value > 0xffffffffffffffffffffffffffffffff) return false;
+		if (_value > MAX_INT256) return false;
 
 		if (super.transfer(_to, _value)) {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
-			snapshot.shares[msg.sender] -= uint128(_value);
-			snapshot.shares[_to] += uint128(_value);
+			snapshot.shares[msg.sender] -= int256(_value);
+			snapshot.shares[_to] += int256(_value);
 			return true;
 		}
 		else {
@@ -47,10 +49,11 @@ contract DigitalShares is Ownable, StandardToken {
 	}
 
 	function transferFrom(address from, address to, uint256 value) returns (bool) {
+		if (value > MAX_INT256) return false;
 		if (super.transferFrom(from, to, value)) {
 			Snapshot storage snapshot = snapshots[snapshots.length - 1];
-			snapshot.shares[from] -= uint128(value);
-			snapshot.shares[to] += uint128(value);
+			snapshot.shares[from] -= int256(value);
+			snapshot.shares[to] += int256(value);
 		}
 	}
 

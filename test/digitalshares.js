@@ -438,31 +438,32 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 	});
 });
 
-contract('DigitalShares uint128 max', async function(accounts) {
+contract('DigitalShares int256 max', async function(accounts) {
 	var contract;
 	var accountOne = accounts[0];
 	var accountTwo = accounts[1];
-	var uint128Max = web3.toBigNumber('0xffffffffffffffffffffffffffffffff');
+	var int256Max = web3.toBigNumber('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
 	beforeEach(async function() {
-		contract = await TestDigitalShares.new(uint128Max);
+		contract = await TestDigitalShares.new(int256Max);
 	});
 
-	it('should successfully create contract with max uint128', async function() {
+	it('should successfully create contract with max int256', async function() {
 		var accountOneBalance = await contract.balanceOf.call(accountOne);
-		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have max uint128 shares');
+		assert.isTrue(accountOneBalance.greaterThan(0), 'Owner balance is positive');
+		assert.isTrue(accountOneBalance.equals(int256Max), 'Owner should have max int256 shares');
 	});
 
-	it('should successfully send max uint128 shares', async function() {
-		await contract.transfer(accountTwo, uint128Max, {from: accountOne});
+	it('should successfully send max int256 shares', async function() {
+		await contract.transfer(accountTwo, int256Max, {from: accountOne});
 		var accountOneBalance = await contract.balanceOf.call(accountOne);
 		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
 		assert.equal(accountOneBalance.toNumber(), 0, 'Owner should have 0 shares');
-		assert.isTrue(accountTwoBalance.equals(uint128Max), 'Account 2 should have uint128 max shares');
+		assert.isTrue(accountTwoBalance.equals(int256Max), 'Account 2 should have int256 max shares');
 	});
 
-	it('should successfully send max uint128 shares, distribute and send back', async function() {
-		var transferAmount = uint128Max;
+	it('should successfully send max int256 shares, distribute and send back', async function() {
+		var transferAmount = int256Max;
 
 		await contract.send(web3.toWei(1, 'ether'));
 		await contract.transfer(accountTwo, transferAmount, {from: accountOne});
@@ -471,22 +472,33 @@ contract('DigitalShares uint128 max', async function(accounts) {
 
 		var accountOneBalance = await contract.balanceOf.call(accountOne);
 		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
-		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have uint128 max shares');
+		assert.isTrue(accountOneBalance.equals(int256Max), 'Owner should have int256 max shares');
 		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have no shares');
 
 		var accountOneBalance = await contract.getCalculatedShares.call({from: accountOne});
 		var accountTwoBalance = await contract.getCalculatedShares.call({from: accountTwo});
-		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have uint128 max shares');
+		assert.isTrue(accountOneBalance.equals(int256Max), 'Owner should have int256 max shares');
 		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have no shares');
 	});
 
 	it('should not send shares more than actually have', async function() {
-		var transferAmount = uint128Max.plus(1);
+		var transferAmount = int256Max.plus(1);
 
 		await contract.transfer(accountTwo, transferAmount, {from: accountOne});
 		var accountOneBalance = await contract.balanceOf.call(accountOne);
 		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
-		assert.isTrue(accountOneBalance.equals(uint128Max), 'Owner should have uint128 max shares');
-		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have 0 shares');
+		assert.isTrue(accountOneBalance.equals(int256Max), 'Owner should still have int256 max shares');
+		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should still have 0 shares');
 	});
+
+	it('contract should not be created with initial shares more that int256 max', async function() {
+		try {
+			var failing = await TestDigitalShares.new(int256Max.plus(1));
+			assert.fail('Should not be here');
+		}
+		catch(e) {
+			// expecting an exception
+		}
+	});
+
 });
