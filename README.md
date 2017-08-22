@@ -1,6 +1,6 @@
 # Digital Shares
 
-Digital Shares contract describes the idea of distributing profit to share holders according to their share balance.
+Digital Shares contract describes the idea of distributing profit to shareholders according to their share balance.
 
 The problem with such contracts is to distribute profit we have to keep a list of share holders and iterate over it and calculate and record each holders profit. We need to distribute profit in one transaction because share holders can exchange their shares simultaniously. When there are not so many holders the scheme with iteration works fine, but when number of share holders grows above 200 distribute profit function runs out of gas. This happens because storing each holders profit takes from 5000 to 20000 gas. In Homestead block gas limit is 4712388. So this effectively limits storage operations which are required to run when we distribute profit.
 
