@@ -1,0 +1,104 @@
+\documentclass[onecolumn]{article}
+
+% \usepackage[utf8]{inputenc}
+% \usepackage[T2A]{fontenc}
+% \usepackage{amsmath,amssymb}
+\usepackage{amsmath}
+\usepackage{url}
+% \usepackage[russian,english]{babel}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\begin{document}
+\title{Digital Shares: Organization Profit Distribution With Unlimited Shareholders}
+
+\author{
+{\rm Anatoly Ressin}\\
+BlockVis\\
+a@blockvis.com
+\and
+{\rm Simon Yakunin}\\
+BlockVis\\
+s@blockvis.com
+}
+
+\maketitle
+
+\subsection*{Abstract}
+The authors introduce Digital Shares, a ERC-20 compatible Ethereum contract which can distribute organization profit between unlimited number of shareholders. The main problem with such contracts is the limited amount of gas available for use in one transaction. When we have limited amount of gas and (potentially) unlimited number of shareholders then we have a problem. To distribute organization profit, contract needs to iterate all shareholders and calculate his/her profit amount according to number of shares. We propose a solution to overcome this issue.
+
+\section{Introduction}
+Digital Shares contract is a solution to overcome issues which are arising when organization needs to distribute profit between shareholders on Ethereum blockchain.
+
+ERC-20 token stores share distribution in a mapping and allowes shareholders to transfer shares between each other. In Ethereum mapping data type is not iterable. So to overcome this, contract needs to store a list of shareholders addresses. When profit distribution occurs a contract must iterate over shareholder list and distribute profit according to number of shares which each particular shareholder have. When there are small number of shareholder this scheme works, but when number of shareholders grows, transaction, which distributes profit, runs out of gas. There are some possible solutions to overcome this. Contract can distribute profit in batches by 100 or 200 shareholders and store an index of last distributed shareholder, so when distribution method is called again the distribution resumes iteration from the last saved index. This solution is very limited. When there are, for example, 10000 shareholders we must run 10000 / 200 = 500 transactions. A contract must also stop all share transfers until all shareholders did not receive their profit. 500 transactions on Ethereum blockchain will run for about 17s * 500tx = 2 hours. And this number will grow as long as the number of shareholders grows.
+
+The proposed solution resolves this issues. A profit distribution transaction costs a constant O(1) amount of gas on unlimited number of shareholders.
+
+\section{Related Works}
+\subsection{Polybius Token}
+Another approach of organisation profit distribution offers Polybius Token:\newline
+
+\textit{The dividends distribution process consists of two stages: gettng the accurate data about the PLBT distribution among users (dividends report) and spreading the company profit among the tokenholders.} \cite{polybius}
+
+This approch is possible, but not recommended on Ethereum network. The recommended approach is to favor pull payments over push payments.\cite{pushpoll}
+
+\subsection{Dividend-bearing tokens on Ethereum\cite{nick}}
+In this article the author proposes a solution with \lstinline{modifier updateAccount(address account)} which must be executed on every share transfer. This approach is better, but from functional point of view we have a method misbehavior. When the method is called it should not do anything besides we asked it to do. When shareholder transfers his shares to another address at this moment two \lstinline{updateAccount} calls are performed. The first one for source account and the second for target account. Besides this costs gas on every transfer call it may raise some exceptions in updateAccount modifier and shareholder would be unable to send his shares for some reason.
+
+\section{Digital Shares}
+The problem with profit distribution that the contract must be able to distribute profit according to shareholders share distribution. ERC-20 contract have \lstinline{mapping(address => uint256) balances} storage to store share distribution. The contract cannot iterate on all shareholders when distributing profit, because transaction will run out of gas when there are many shareholders. The point is when profit distribution transaction performs, the contract must take a snapshot of shareholders share distribution and when shareholder withdraws profit a contract can calculate it easily. This can be achieved by having array of struct where each array item represents share distribution on a moment of profit distribution and amount of distributed profit:
+\begin{lstlisting}[language=C]
+struct Snapshot {
+	uint256 amountInWei;
+	mapping(address => uint256) balances;
+}
+Snapshot[] shapshots;
+\end{lstlisting}
+This way when shareholder withdraws his profit, the contract is able to get back in past and calculate shareholders profit for every profit distribution by using simple formula:
+\begin{lstlisting}
+uint profit = 0;
+for(uint i = 0; i < snapshots.length; i++) {
+	Snapshot snapshot = snapshots[i];
+	profit += snapshot.balances[msg.sender] * snapshot.amountInWei / totalSupply;
+}
+\end{lstlisting}
+The point which makes this scheme impossible to work is that we cannot copy mappings in Ethereum. The only way we could copy balances is to have an array of known shareholders addresses and iterate over it to copy data into new snapshot. This is not possible either because when there will be several thousands of shareholders our copying procedure will run out of gas. But how can we take a snapshot of share distribution without iterating all shareholders balances? The solution is that each snapshot should store not the share balance itself, but the balance changes. So the Snapshot struct will look like the following:
+\begin{lstlisting}[language=C]
+struct Snapshot {
+	uint256 amountInWei;
+	mapping(address => int256) balances;
+}
+Snapshot[] shapshots;
+\end{lstlisting}
+Using this approach the first snapshot will store absolute share distribution and the following snapshots will store relative share distribution. This way when profit distribution occurs the contract must create only new empty snapshot and store how much profit the contract must distribute. When shareholder calls withdraw method the contract calculates shareholder profit using almost the same formula:
+\begin{lstlisting}
+int256 shares = 0;
+uint profit = 0;
+for(uint i = 0; i < snapshots.length; i++) {
+	Snapshot snapshot = snapshots[i];
+	shares += snapshot.balances[msg.sender];
+	profit += uint256(shares) * snapshot.amountInWei / totalSupply;
+}
+\end{lstlisting}
+
+
+\section{Conclusion}
+
+\begin{thebibliography}{3}
+
+\bibitem{polybius}
+	\emph{POLYBIUS TOKEN WHITEPAPER}\newline
+	\url{https://polybius.io/media/token_whitepaper.pdf}
+
+\bibitem{pushpoll}
+	\emph{ConsenSys: Ethereum Contract Security Techniques and Tips}\newline
+	\url{https://github.com/ConsenSys/smart-contract-best-practices#favor-pull-over-push-payments}
+
+\bibitem{nick}
+	Nick Johnson,
+	\emph{Dividend-bearing tokens on Ethereum}\newline
+	\url{https://medium.com/@weka/dividend-bearing-tokens-on-ethereum-42d01c710657}
+
+\end{thebibliography}
+
+\end{document}
