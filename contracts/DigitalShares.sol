@@ -89,7 +89,7 @@ contract DigitalShares is Ownable, StandardToken {
 	}
 
 	function performWithdraw(uint256 _snapshotIndex) internal returns (bool) {
-		uint256 numerator = 0;
+		uint256 numerator = unpayedWei[msg.sender];
 		int256 shares = 0;
 		for (uint256 i = payed[msg.sender]; i < _snapshotIndex; i++) {
 			Snapshot storage snapshot = snapshots[i];
@@ -99,9 +99,9 @@ contract DigitalShares is Ownable, StandardToken {
 			}
 			snapshot.shares[msg.sender] = 0;
 		}
+
 		snapshots[_snapshotIndex].shares[msg.sender] += shares;
 
-		numerator = numerator.add(unpayedWei[msg.sender]);
 		if (numerator > 0) {
 			uint256 amount = numerator / totalSupply;
 			unpayedWei[msg.sender] = numerator % totalSupply;
@@ -121,7 +121,7 @@ contract DigitalShares is Ownable, StandardToken {
 	}
 
 	function getDividends() constant returns (uint256) {
-		uint256 numerator = 0;
+		uint256 numerator = unpayedWei[msg.sender];
 		int256 shares = 0;
 		for (uint256 i = payed[msg.sender]; i < snapshots.length - 1; i++) {
 			Snapshot storage snapshot = snapshots[i];
@@ -130,7 +130,6 @@ contract DigitalShares is Ownable, StandardToken {
 				numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
 			}
 		}
-		numerator = numerator.add(unpayedWei[msg.sender]);
 		return numerator / totalSupply;
 	}
 
