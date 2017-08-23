@@ -1,7 +1,7 @@
 \documentclass[onecolumn]{article}
 
-% \usepackage[utf8]{inputenc}
-% \usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
 % \usepackage{amsmath,amssymb}
 \usepackage{amsmath}
 \usepackage{url}
@@ -9,7 +9,9 @@
 \usepackage{listings}
 \usepackage{xcolor}
 
+
 \begin{document}
+
 \title{Digital Shares: Organization Profit Distribution With Unlimited Shareholders}
 
 \author{
@@ -61,6 +63,7 @@ for(uint i = 0; i < snapshots.length; i++) {
 	Snapshot snapshot = snapshots[i];
 	profit += snapshot.balances[msg.sender] * snapshot.amountInWei / totalSupply;
 }
+...
 \end{lstlisting}
 The point which makes this scheme impossible to work is that we cannot copy mappings in Ethereum. The only way we could copy balances is to have an array of known shareholders addresses and iterate over it to copy data into new snapshot. This is not possible either because when there will be several thousands of shareholders our copying procedure will run out of gas. But how can we take a snapshot of share distribution without iterating all shareholders balances? The solution is that each snapshot should store not the share balance itself, but the balance changes. So the Snapshot struct will look like the following:
 \begin{lstlisting}[language=C]
@@ -70,14 +73,68 @@ struct Snapshot {
 }
 Snapshot[] shapshots;
 \end{lstlisting}
-Using this approach the first snapshot will store absolute share distribution and the following snapshots will store relative share distribution. This way when profit distribution occurs the contract must create only new empty snapshot and store how much profit the contract must distribute. When shareholder calls withdraw method the contract calculates shareholder profit using almost the same formula:
+Using this approach the first snapshot will store absolute share distribution and the following snapshots will store relative share distribution. This way when profit distribution occurs the contract must create only new empty snapshot and store how much profit the contract must distribute. When shareholder calls \lstinline{withdraw()} method the contract calculates shareholder profit using almost the same formula:
 \begin{lstlisting}
 int256 shares = 0;
 uint profit = 0;
-for(uint i = 0; i < snapshots.length; i++) {
+for(uint i = 0; i < snapshots.length - 1; i++) {
 	Snapshot snapshot = snapshots[i];
 	shares += snapshot.balances[msg.sender];
 	profit += uint256(shares) * snapshot.amountInWei / totalSupply;
+}
+...
+\end{lstlisting}
+\lstinline{snapshots.length-1} is required because last snapshot contains current share balance changes and is not included in withdrawal at the moment when \lstinline{withdraw()} is called.
+
+Althou this method works it has several drawbacks. The first one is if the shareholder calls \lstinline{withdraw()} method twice the profit amount will be calculated from the beginning and this is not right. So contract needs to store latest payed snapshot and next time when \lstinline{withdraw()} is called by shareholder iteration is starting from latest payed snapshot:
+\begin{lstlisting}
+mapping(address => uint) payed;
+...
+function withdraw() returns (bool) {
+	int256 shares = 0;
+	uint profit = 0;
+	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+		Snapshot snapshot = snapshots[i];
+		shares += snapshot.balances[msg.sender];
+		profit += uint256(shares) * snapshot.amountInWei / totalSupply;
+	}
+	payed[msg.sender] = snapshots.length - 1;
+	...
+}
+\end{lstlisting}
+Second drawback is that division by \lstinline{totalSupply} is done on every iteration and this costs gas. We can improve this algorithm by moving division out of cycle:
+\begin{lstlisting}
+function withdraw() returns (bool) {
+	int256 shares = 0;
+	uint profit = 0;
+	uint numerator = 0;
+	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+		Snapshot snapshot = snapshots[i];
+		shares += snapshot.balances[msg.sender];
+		numerator += uint256(shares) * snapshot.amountInWei;
+	}
+	profit = numerator / totalSupply;
+	payed[msg.sender] = snapshots.length - 1;
+	...
+}
+\end{lstlisting}
+Another drawback is that sometimes we cannot equally divide organization profit between shareholders. For example, organization have only 30 shares and 3 shareholders each having 10 shares. When we want to distribute 10 wei, we cannot do it, because each shareholder must receive 3.3(3) wei of profit. To resolve this problem contract stores undivided wei count, so it can return shareholders profit when next time shareholder will come for his profit.
+\begin{lstlisting}
+mapping(address => uint) unpayedWei;
+...
+function withdraw() returns (bool) {
+	int256 shares = 0;
+	uint profit = 0;
+	uint numerator = unpayedWei[msg.sender];
+	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+		Snapshot snapshot = snapshots[i];
+		shares += snapshot.balances[msg.sender];
+		numerator += uint256(shares) * snapshot.amountInWei;
+	}
+	profit = numerator / totalSupply;
+	unpayedWei[msg.sender] = numerator % totalSupply;
+	payed[msg.sender] = snapshots.length - 1;
+	...
 }
 \end{lstlisting}
 
