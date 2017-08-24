@@ -94,9 +94,8 @@ contract DigitalShares is Ownable, StandardToken {
 		for (uint256 i = payed[msg.sender]; i < _snapshotIndex; i++) {
 			Snapshot storage snapshot = snapshots[i];
 			shares += snapshot.shares[msg.sender];
-			if (shares > 0) { // just to be sure we can cast to uint256
-				numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
-			}
+			assert(shares >= 0);
+			numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
 			snapshot.shares[msg.sender] = 0;
 		}
 
@@ -126,9 +125,8 @@ contract DigitalShares is Ownable, StandardToken {
 		for (uint256 i = payed[msg.sender]; i < snapshots.length - 1; i++) {
 			Snapshot storage snapshot = snapshots[i];
 			shares += snapshot.shares[msg.sender];
-			if (shares > 0) { // just to be sure we can cast to uint256
-				numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
-			}
+			assert(shares >= 0);
+			numerator = numerator.add(snapshot.amountInWei.mul(uint256(shares)));
 		}
 		return numerator / totalSupply;
 	}
