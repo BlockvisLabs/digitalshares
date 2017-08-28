@@ -27,12 +27,12 @@ s@blockvis.com
 \maketitle
 
 \subsection*{Abstract}
-The authors introduce Digital Shares, a ERC-20 compatible Ethereum contract which can distribute organization profit between unlimited number of shareholders. The main problem with such contracts is the limited amount of gas available for use in one transaction. When we have limited amount of gas and (potentially) unlimited number of shareholders then we have a problem. To distribute organization profit, contract needs to iterate all shareholders and calculate his/her profit amount according to number of shares. We propose a solution to overcome this issue.
+The authors introduce Digital Shares, a ERC-20  compatible Ethereum contract which can distribute organization profit between unlimited number of shareholders. The main problem with such contracts is the limited amount of gas available for use in one transaction. When we have limited amount of gas and (potentially) unlimited number of shareholders then we have a problem. To distribute organization profit, contract needs to iterate all shareholders and calculate his/her profit amount according to number of shares. We propose a solution to overcome this issue.
 
 \section{Introduction}
-Digital Shares contract is a solution to overcome issues which are arising when organization needs to distribute profit between shareholders on Ethereum blockchain.
+Digital Shares contract is a solution to overcome issues which are arising when organization needs to distribute profit between shareholders on Ethereum  \cite{ethereum} blockchain.
 
-ERC-20 token stores share distribution in a mapping and allowes shareholders to transfer shares between each other. In Ethereum mapping data type is not iterable. So to overcome this, contract needs to store a list of shareholders addresses. When profit distribution occurs a contract must iterate over shareholder list and distribute profit according to number of shares which each particular shareholder have. When there are small number of shareholder this scheme works, but when number of shareholders grows, transaction, which distributes profit, runs out of gas. There are some possible solutions to overcome this. Contract can distribute profit in batches by 100 or 200 shareholders and store an index of last distributed shareholder, so when distribution method is called again the distribution resumes iteration from the last saved index. This solution is very limited. When there are, for example, 10000 shareholders we must run 10000 / 200 = 500 transactions. A contract must also stop all share transfers until all shareholders did not receive their profit. 500 transactions on Ethereum blockchain will run for about 17s * 500tx = 2 hours. And this number will grow as long as the number of shareholders grows.
+ERC-20 \cite{erc20} token stores share distribution in a mapping and allowes shareholders to transfer shares between each other. In Ethereum mapping data type is not iterable. So to overcome this, contract needs to store a list of shareholders addresses. When profit distribution occurs a contract must iterate over shareholder list and distribute profit according to number of shares which each particular shareholder have. When there are small number of shareholder this scheme works, but when number of shareholders grows, transaction, which distributes profit, runs out of gas. There are some possible solutions to overcome this. Contract can distribute profit in batches by 100 or 200 shareholders and store an index of last distributed shareholder, so when distribution method is called again the distribution resumes iteration from the last saved index. This solution is very limited. When there are, for example, 10000 shareholders we must run 10000 / 200 = 500 transactions. A contract must also stop all share transfers until all shareholders did not receive their profit. 500 transactions on Ethereum blockchain will run for about 17s * 500tx = 2 hours. And this number will grow as long as the number of shareholders grows.
 
 The proposed solution resolves this issues. A profit distribution transaction costs a constant O(1) amount of gas on unlimited number of shareholders.
 
@@ -85,40 +85,49 @@ for(uint i = 0; i < snapshots.length - 1; i++) {
 ...
 \end{lstlisting}
 \lstinline{snapshots.length-1} is required because last snapshot contains current share balance changes and is not included in withdrawal at the moment when \lstinline{withdraw()} is called.
+Althou this algorithm works, it can be improved further.
 
-Althou this method works it has several drawbacks. The first one is if the shareholder calls \lstinline{withdraw()} method twice the profit amount will be calculated from the beginning and this is not right. So contract needs to store latest payed snapshot and next time when \lstinline{withdraw()} is called by shareholder iteration is starting from latest payed snapshot:
+\section{Improvements}
+\subsection{Duplication}
+When shareholder calls \lstinline{withdraw()} method twice the profit amount will be calculated from the beginning and already paid profit will be calculated again. So the contract needs to store latest paid snapshot and next time when \lstinline{withdraw()} is called by shareholder, iteration is started from latest paid snapshot:
 \begin{lstlisting}
 mapping(address => uint) payed;
 ...
 function withdraw() returns (bool) {
 	int256 shares = 0;
 	uint profit = 0;
-	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		profit += uint256(shares) * snapshot.amountInWei / totalSupply;
+		if (i >= payed[msg.sender]) {
+			profit += uint256(shares) * snapshot.amountInWei / totalSupply;
+		}
 	}
 	payed[msg.sender] = snapshots.length - 1;
 	...
 }
 \end{lstlisting}
-Second drawback is that division by \lstinline{totalSupply} is done on every iteration and this costs gas. We can improve this algorithm by moving division out of cycle:
+\subsection{Gas Usage}
+Let's look at the cycle. We can see that division by \lstinline{totalSupply} is done on every iteration and this costs gas. We can improve this algorithm by moving division out of cycle:
 \begin{lstlisting}
 function withdraw() returns (bool) {
 	int256 shares = 0;
 	uint profit = 0;
 	uint numerator = 0;
-	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		numerator += uint256(shares) * snapshot.amountInWei;
+		if (i >= payed[msg.sender]) {
+			numerator += uint256(shares) * snapshot.amountInWei;
+		}
 	}
 	profit = numerator / totalSupply;
 	payed[msg.sender] = snapshots.length - 1;
 	...
 }
 \end{lstlisting}
-Another drawback is that sometimes we cannot equally divide organization profit between shareholders. For example, organization have only 30 shares and 3 shareholders each having 10 shares. When we want to distribute 10 wei, we cannot do it, because each shareholder must receive 3.3(3) wei of profit. To resolve this problem contract stores undivided wei count, so it can return shareholders profit when next time shareholder will come for his profit.
+\subsection{Rounding Errors}
+Sometimes the profit between shareholders cannot equally divided. For example, organization have only 30 shares and 3 shareholders each having 10 shares. When we want to distribute 10 wei, we cannot do it, because each shareholder must receive 3.3(3) wei of profit. To resolve this problem contract stores undivided wei count, so it can return undistributed shareholders profit when next time shareholder will come for his profit.
 \begin{lstlisting}
 mapping(address => uint) unpayedWei;
 ...
@@ -126,10 +135,12 @@ function withdraw() returns (bool) {
 	int256 shares = 0;
 	uint profit = 0;
 	uint numerator = unpayedWei[msg.sender];
-	for(uint i = payed[msg.sender]; i < snapshots.length - 1; i++) {
+	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		numerator += uint256(shares) * snapshot.amountInWei;
+		if (i >= payed[msg.sender]) {
+			numerator += uint256(shares) * snapshot.amountInWei;
+		}
 	}
 	profit = numerator / totalSupply;
 	unpayedWei[msg.sender] = numerator % totalSupply;
@@ -137,11 +148,57 @@ function withdraw() returns (bool) {
 	...
 }
 \end{lstlisting}
+\subsection{Redundant Cycles}
+It can be seen that each cycle within withdraw() method starts from 0. When number of snapshots gets high this can consume a lot of gas.
 
+After the cycle ends, we have current share balance of a particular shareholder stored in shares variable. We can store this balance, so when the same shareholder calls withdraw() method again, the contract will take this balance as an absolute value and count the differences from the last point:
+\begin{lstlisting}
+mapping(address => uint) unpayedWei;
+...
+function withdraw() returns (bool) {
+	int256 shares = 0;
+	uint profit = 0;
+	uint numerator = unpayedWei[msg.sender];
+	uint lastSnapshotIndex = snapshots.length - 1;
+	for(uint i = payed[msg.sender]; i < lastSnapshotIndex; i++) {
+		Snapshot snapshot = snapshots[i];
+		shares += snapshot.balances[msg.sender];
+		numerator += uint256(shares) * snapshot.amountInWei;
+	}
+	snapshots[lastSnapshotIndex].shares[msg.sender] += shares;
+	profit = numerator / totalSupply;
+	unpayedWei[msg.sender] = numerator % totalSupply;
+	payed[msg.sender] = lastSnapshotIndex;
+	...
+}
+\end{lstlisting}
+\section{Metrics}
+The table contains statistic data about gas consumption of two most important methods. Both methods are invariant from the shareholders count.
+
+\begin{center}
+	\begin{tabular}{| l | r | r | r | r |}
+		\hline
+		Method/Number of distribute() calls & 1 & 10 & 100 & 1000 \\ \hline
+		distribute() & 74320 & 74320 & 74320 & 74320 \\ \hline
+		withdraw() & 69511 & 80482 & 190192 & 1287292\\
+		\hline
+	\end{tabular}
+\end{center}
+
+As we can see \lstinline{distribute()} method uses constant amount of gas.
+
+\lstinline{withdraw()} method depends only on number of sequential \lstinline{distribute()} method calls. But once the \lstinline{withdraw()} is called the gas consumption of the next \lstinline(withdraw()) method call starts from the beginning. This way, the shareholder may not withdraw his profit for a long period of time and withdraw all of his profit with one large transaction. The gas consumtion of \lstinline{withdraw()} method is so low, that if organization profit distribtution is done every day, then shareholder may not withdraw his profit for 1000 days and still be able to withdraw his profit with one transaction.
 
 \section{Conclusion}
+The proposed solution is able to handle any number of shareholders within organization. It consumes constant amount of gas on organization profit distribution and gas consumption of profit withdrawal is only dependant on profit distribution count.
+\begin{thebibliography}{5}
+\bibitem{ethereum}
+	\emph{Ethereum White Paper}\newline
+	\url{https://github.com/ethereum/wiki/wiki/White-Paper}
 
-\begin{thebibliography}{3}
+\bibitem{erc20}
+	\emph{ERC-20 Token Standard}\newline
+	\url{https://theethereum.wiki/w/index.php/ERC20_Token_Standard}
 
 \bibitem{polybius}
 	\emph{POLYBIUS TOKEN WHITEPAPER}\newline

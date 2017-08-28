@@ -9,8 +9,8 @@ contract TestDigitalShares is DigitalShares {
 
 	function getCalculatedShares() constant returns (uint256) {
 		int256 shares = 0;
-		for (uint256 i = 0; i < snapshots.length; i++) {
-			Snapshot storage snapshot = snapshots[i];
+		for (uint256 i = 0; i < distributions.length; i++) {
+			Snapshot storage snapshot = distributions[i];
 			shares += snapshot.shares[msg.sender];
 		}
 		assert(shares >= 0);
@@ -19,8 +19,8 @@ contract TestDigitalShares is DigitalShares {
 
 	function getCalculatedSharesUsingPayed() constant returns (uint256) {
 		int256 shares = 0;
-		for (uint256 i = payed[msg.sender]; i < snapshots.length; i++) {
-			Snapshot storage snapshot = snapshots[i];
+		for (uint256 i = lastPaidDistribution[msg.sender]; i < distributions.length; i++) {
+			Snapshot storage snapshot = distributions[i];
 			shares += snapshot.shares[msg.sender];
 		}
 		assert(shares >= 0);
@@ -28,11 +28,11 @@ contract TestDigitalShares is DigitalShares {
 	}
 
 	function getShapshotShares(uint index) constant returns (int256) {
-		return snapshots[index].shares[msg.sender];
+		return distributions[index].shares[msg.sender];
 	}
 
 	function getUnpayedWei(address holder) constant returns (uint256) {
-		return unpayedWei[holder];
+		return unpaidWei[holder];
 	}
 
 	function getReserved() constant returns (uint256) {

@@ -12,7 +12,7 @@ contract('DigitalShares', async function(accounts) {
 
 	it('should successfully create contract', async function() {
 		var shares = await contract.balanceOf.call(accountOne);
-		var snapshotCount = await contract.getSnapshotCount.call();
+		var snapshotCount = await contract.getDistributionCount.call();
 
 		assert.equal(shares.toNumber(), 10000, 'account should have 10000 shares');
 		assert.equal(snapshotCount, 1, 'must be 1 snapshot after initialize');
@@ -168,20 +168,20 @@ contract('DigitalShares', async function(accounts) {
 			assert.notEqual(snapshotShares, 0, 'shares must not be equal to 0');
 		}
 	});
+	// Disabled because assigning 0 costs more gas than not to assign 0
+	// it('after withdraw snapshot shares becomes 0', async function() {
+	// 	for (var i = 0; i < 3; i++) {
+	// 		await contract.distribute(web3.toWei(1, 'ether'));
+	// 		await contract.transfer(accountTwo, 10, {from: accountOne});
+	// 	}
 
-	it('after withdraw snapshot shares becomes 0', async function() {
-		for (var i = 0; i < 3; i++) {
-			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transfer(accountTwo, 10, {from: accountOne});
-		}
+	// 	await contract.withdraw({from: accountOne});
 
-		await contract.withdraw({from: accountOne});
-
-		for (var i = 0; i < 3; i++) {
-			var snapshotShares = await contract.getShapshotShares(i, { from: accountOne });
-			assert.equal(snapshotShares, 0, 'shares must be equal to 0');
-		}
-	});
+	// 	for (var i = 0; i < 3; i++) {
+	// 		var snapshotShares = await contract.getShapshotShares(i, { from: accountOne });
+	// 		assert.equal(snapshotShares.toNumber(), 0, 'shares must be equal to 0');
+	// 	}
+	// });
 
 	it('after withdraw last snapshot holds all balance', async function() {
 		for (var i = 0; i < 3; i++) {
@@ -191,26 +191,27 @@ contract('DigitalShares', async function(accounts) {
 
 		await contract.withdraw({from: accountOne});
 
-		var snapshotCount = await contract.getSnapshotCount();
+		var snapshotCount = await contract.getDistributionCount();
 
 		var shares = await contract.getShapshotShares(snapshotCount - 1, { from: accountOne });
 		assert.equal(shares.toNumber(), 10000 - 10 - 10 - 10, 'shares must be equal to 9970');
 	});
+	
+	// Disabled because assigning 0 costs more gas than not to assign 0
+	// it('after withdrawUpTo snapshot shares becomes 0', async function() {
+	// 	var upToSnapshot = 3;
+	// 	for (var i = 0; i < 5; i++) {
+	// 		await contract.distribute(web3.toWei(1, 'ether'));
+	// 		await contract.transfer(accountTwo, 10, {from: accountOne});
+	// 	}
 
-	it('after withdrawUpTo snapshot shares becomes 0', async function() {
-		var upToSnapshot = 3;
-		for (var i = 0; i < 5; i++) {
-			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transfer(accountTwo, 10, {from: accountOne});
-		}
+	// 	await contract.withdrawUpTo(upToSnapshot, {from: accountOne});
 
-		await contract.withdrawUpTo(upToSnapshot, {from: accountOne});
-
-		for (var i = 0; i < upToSnapshot; i++) {
-			var snapshotShares = await contract.getShapshotShares(i, { from: accountOne });
-			assert.equal(snapshotShares, 0, 'shares must be equal to 0');
-		}
-	});
+	// 	for (var i = 0; i < upToSnapshot; i++) {
+	// 		var snapshotShares = await contract.getShapshotShares(i, { from: accountOne });
+	// 		assert.equal(snapshotShares, 0, 'shares must be equal to 0');
+	// 	}
+	// });
 
 	it('after withdrawUpTo "upTo" snapshot holds balance', async function() {
 		var upToSnapshot = 3;
