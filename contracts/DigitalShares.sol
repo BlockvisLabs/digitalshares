@@ -62,10 +62,10 @@ contract DigitalShares is Ownable, StandardToken {
 		require(_totalSupply > 0);
 		require(_totalSupply <= MAX_INT256);
 		totalSupply = _totalSupply;
-		balances[tx.origin] = _totalSupply; // msg.sender ?
+		balances[msg.sender] = _totalSupply;
 		distributions.push(Snapshot({amountInWei: 0}));
 		Snapshot storage snapshot = distributions[distributions.length - 1];
-		snapshot.shares[tx.origin] = int256(_totalSupply);
+		snapshot.shares[msg.sender] = int256(_totalSupply);
 	}
 
 	function transfer(address _to, uint256 _value) returns (bool) {
@@ -119,7 +119,7 @@ contract DigitalShares is Ownable, StandardToken {
 		return performWithdraw(distributions.length - 1);
 	}
 	/**
-	 * This function withdraws ether up to 'snapshotIndex' snapshot.
+	 * This function withdraws ether up to '_upToDistribution' snapshot.
 	 * There can be many distributions and we need to save payout at each snapshot, so we can run out of gas. So this function is needed to partially withdraw funds.
 	 */
 	function withdrawUpTo(uint256 _upToDistribution) external returns (bool) {

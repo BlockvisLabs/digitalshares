@@ -15,15 +15,15 @@ contract('DigitalSharesExchange', async function(accounts) {
 		assert.equal(available.toNumber(), 10000);
 	});
 
-	it('available shares must decrease after exchangeApprove', async function() {
-		await contract.exchangeApprove(exchange, 100);
+	it('available shares must decrease after transferToExchange', async function() {
+		await contract.transferToExchange(exchange, 100);
 		var available = await contract.getAvailableBalance();
 		assert.equal(available.toNumber(), 9900);
 	});
 
 	it('should show exchangeAllowance', async function() {
 		var blockedAmount = 1000;
-		await contract.exchangeApprove(exchange, blockedAmount, {from: accountOne});
+		await contract.transferToExchange(exchange, blockedAmount, {from: accountOne});
 
 		var exchangeAllowance = await contract.exchangeAllowance(accountOne, exchange);
 		assert.equal(exchangeAllowance.toNumber(), blockedAmount);
@@ -31,7 +31,7 @@ contract('DigitalSharesExchange', async function(accounts) {
 
 	it('transfer should success when moving less than blocked', async function() {
 		var blockedAmount = 1000;
-		await contract.exchangeApprove(exchange, blockedAmount);
+		await contract.transferToExchange(exchange, blockedAmount);
 		await contract.transfer(accountTwo, 2000, {from: accountOne});
 		var balance = await contract.balanceOf(accountOne);
 		assert.equal(balance.toNumber(), 8000);
@@ -41,7 +41,7 @@ contract('DigitalSharesExchange', async function(accounts) {
 
 	it('should block shares on another account after exchangeTransfer', async function() {
 		var blockedAmount = 1000;
-		await contract.exchangeApprove(exchange, blockedAmount, {from: accountOne});
+		await contract.transferToExchange(exchange, blockedAmount, {from: accountOne});
 		await contract.exchangeTransfer(accountOne, accountTwo, blockedAmount, {from: exchange});
 
 		var accountOneBalance = await contract.balanceOf(accountOne);
@@ -57,11 +57,11 @@ contract('DigitalSharesExchange', async function(accounts) {
 		assert.equal(exchangeAllowance.toNumber(), blockedAmount);
 	});
 
-	it('should unblock shares on another account after exchangeReturn', async function() {
+	it('should unblock shares on another account after releaseShares', async function() {
 		var blockedAmount = 1000;
-		await contract.exchangeApprove(exchange, blockedAmount, {from: accountOne});
+		await contract.transferToExchange(exchange, blockedAmount, {from: accountOne});
 		await contract.exchangeTransfer(accountOne, accountTwo, blockedAmount, {from: exchange});
-		await contract.exchangeReturn(accountTwo, blockedAmount, {from: exchange});
+		await contract.releaseShares(accountTwo, blockedAmount, {from: exchange});
 
 		var accountTwoAvailable = await contract.getAvailableBalance({from: accountTwo});
 		assert.equal(accountTwoAvailable.toNumber(), 1000);
@@ -70,7 +70,7 @@ contract('DigitalSharesExchange', async function(accounts) {
 	it('should be possible to distribute while shares are blocked on exchange', async function() {
 		var blockedAmount = 1000;
 		await contract.send(web3.toWei(1, 'ether'));
-		await contract.exchangeApprove(exchange, blockedAmount, {from: accountOne});
+		await contract.transferToExchange(exchange, blockedAmount, {from: accountOne});
 		await contract.transfer(accountTwo, 1000, {from: accountOne});
 
 		await contract.distribute(web3.toWei(1, 'ether'));
