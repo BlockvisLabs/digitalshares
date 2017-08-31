@@ -91,7 +91,7 @@ Althou this algorithm works, it can be improved further.
 \subsection{Duplication}
 When shareholder calls \lstinline{withdraw()} method twice the profit amount will be calculated from the beginning and already paid profit will be calculated again. So the contract needs to store latest paid snapshot and next time when \lstinline{withdraw()} is called by shareholder, iteration is started from latest paid snapshot:
 \begin{lstlisting}
-mapping(address => uint) payed;
+mapping(address => uint) paid;
 ...
 function withdraw() returns (bool) {
 	int256 shares = 0;
@@ -99,11 +99,11 @@ function withdraw() returns (bool) {
 	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		if (i >= payed[msg.sender]) {
+		if (i >= paid[msg.sender]) {
 			profit += uint256(shares) * snapshot.amountInWei / totalSupply;
 		}
 	}
-	payed[msg.sender] = snapshots.length - 1;
+	paid[msg.sender] = snapshots.length - 1;
 	...
 }
 \end{lstlisting}
@@ -117,34 +117,34 @@ function withdraw() returns (bool) {
 	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		if (i >= payed[msg.sender]) {
+		if (i >= paid[msg.sender]) {
 			numerator += uint256(shares) * snapshot.amountInWei;
 		}
 	}
 	profit = numerator / totalSupply;
-	payed[msg.sender] = snapshots.length - 1;
+	paid[msg.sender] = snapshots.length - 1;
 	...
 }
 \end{lstlisting}
 \subsection{Rounding Errors}
 Sometimes the profit between shareholders cannot equally divided. For example, organization have only 30 shares and 3 shareholders each having 10 shares. When we want to distribute 10 wei, we cannot do it, because each shareholder must receive 3.3(3) wei of profit. To resolve this problem contract stores undivided wei count, so it can return undistributed shareholders profit when next time shareholder will come for his profit.
 \begin{lstlisting}
-mapping(address => uint) unpayedWei;
+mapping(address => uint) unpaidWei;
 ...
 function withdraw() returns (bool) {
 	int256 shares = 0;
 	uint profit = 0;
-	uint numerator = unpayedWei[msg.sender];
+	uint numerator = unpaidWei[msg.sender];
 	for(uint i = 0; i < snapshots.length - 1; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
-		if (i >= payed[msg.sender]) {
+		if (i >= paid[msg.sender]) {
 			numerator += uint256(shares) * snapshot.amountInWei;
 		}
 	}
 	profit = numerator / totalSupply;
-	unpayedWei[msg.sender] = numerator % totalSupply;
-	payed[msg.sender] = snapshots.length - 1;
+	unpaidWei[msg.sender] = numerator % totalSupply;
+	paid[msg.sender] = snapshots.length - 1;
 	...
 }
 \end{lstlisting}
@@ -153,22 +153,22 @@ It can be seen that each cycle within withdraw() method starts from 0. When numb
 
 After the cycle ends, we have current share balance of a particular shareholder stored in shares variable. We can store this balance, so when the same shareholder calls withdraw() method again, the contract will take this balance as an absolute value and count the differences from the last point:
 \begin{lstlisting}
-mapping(address => uint) unpayedWei;
+mapping(address => uint) unpaidWei;
 ...
 function withdraw() returns (bool) {
 	int256 shares = 0;
 	uint profit = 0;
-	uint numerator = unpayedWei[msg.sender];
+	uint numerator = unpaidWei[msg.sender];
 	uint lastSnapshotIndex = snapshots.length - 1;
-	for(uint i = payed[msg.sender]; i < lastSnapshotIndex; i++) {
+	for(uint i = paid[msg.sender]; i < lastSnapshotIndex; i++) {
 		Snapshot snapshot = snapshots[i];
 		shares += snapshot.balances[msg.sender];
 		numerator += uint256(shares) * snapshot.amountInWei;
 	}
 	snapshots[lastSnapshotIndex].shares[msg.sender] += shares;
 	profit = numerator / totalSupply;
-	unpayedWei[msg.sender] = numerator % totalSupply;
-	payed[msg.sender] = lastSnapshotIndex;
+	unpaidWei[msg.sender] = numerator % totalSupply;
+	paid[msg.sender] = lastSnapshotIndex;
 	...
 }
 \end{lstlisting}

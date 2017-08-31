@@ -324,7 +324,7 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		assert.equal(undistributed.toNumber(), 1, 'contract should have 1 wei undistributed');
 	});
 
-	it('unpayed 30', async function() {
+	it('unpaid 30', async function() {
 		var contract = await TestDigitalShares.new(30);
 		await contract.send(web3.toWei(1, 'ether'));
 		await contract.transfer(accountTwo, 10, {from: accountOne});
@@ -336,16 +336,16 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		await contract.withdraw({from: accountTwo});
 		await contract.withdraw({from: accountThree});
 
-		var accountOneUnpayed = await contract.getUnpayedWei(accountOne);
-		var accountTwoUnpayed = await contract.getUnpayedWei(accountTwo);
-		var accountThreeUnpayed = await contract.getUnpayedWei(accountThree);
+		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
+		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
+		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
 
-		assert.equal(10, accountOneUnpayed.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpayed');
-		assert.equal(10, accountTwoUnpayed.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpayed');
-		assert.equal(10, accountThreeUnpayed.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpayed');
+		assert.equal(10, accountOneUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
+		assert.equal(10, accountTwoUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
+		assert.equal(10, accountThreeUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
 	});
 
-	it('unpayed 99', async function() {
+	it('unpaid 99', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(1, 'ether'));
 		await contract.transfer(accountTwo, 10, {from: accountOne});
@@ -357,16 +357,16 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		await contract.withdraw({from: accountTwo});
 		await contract.withdraw({from: accountThree});
 
-		var accountOneUnpayed = await contract.getUnpayedWei(accountOne);
-		var accountTwoUnpayed = await contract.getUnpayedWei(accountTwo);
-		var accountThreeUnpayed = await contract.getUnpayedWei(accountThree);
+		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
+		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
+		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
 
-		assert.equal(56, accountOneUnpayed.toNumber(), '(56 shares * 1 ether) % 99 shares = 56 unpayed');
-		assert.equal(10, accountTwoUnpayed.toNumber(), '(10 shares * 1 ether) % 99 shares = 10 unpayed');
-		assert.equal(33, accountThreeUnpayed.toNumber(), '(33 shares * 1 ether) % 99 shares = 33 unpayed');
+		assert.equal(56, accountOneUnpaid.toNumber(), '(56 shares * 1 ether) % 99 shares = 56 unpaid');
+		assert.equal(10, accountTwoUnpaid.toNumber(), '(10 shares * 1 ether) % 99 shares = 10 unpaid');
+		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 1 ether) % 99 shares = 33 unpaid');
 	});
 
-	it('unpayed 99 with 1.3333 ether', async function() {
+	it('unpaid 99 with 1.3333 ether', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(1.3333, 'ether'));
 		await contract.transfer(accountTwo, 10, {from: accountOne});
@@ -379,18 +379,18 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		await contract.withdraw({from: accountThree});
 
 		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpayed = await contract.getUnpayedWei(accountOne);
-		var accountTwoUnpayed = await contract.getUnpayedWei(accountTwo);
-		var accountThreeUnpayed = await contract.getUnpayedWei(accountThree);
+		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
+		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
+		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
 
-		assert.equal(89, accountOneUnpayed.toNumber(), '(56 shares * 1.3333 ether) % 99 shares = 89 unpayed');
-		assert.equal(76, accountTwoUnpayed.toNumber(), '(10 shares * 1.3333 ether) % 99 shares = 76 unpayed');
-		assert.equal(33, accountThreeUnpayed.toNumber(), '(33 shares * 1.3333 ether) % 99 shares = 33 unpayed');
+		assert.equal(89, accountOneUnpaid.toNumber(), '(56 shares * 1.3333 ether) % 99 shares = 89 unpaid');
+		assert.equal(76, accountTwoUnpaid.toNumber(), '(10 shares * 1.3333 ether) % 99 shares = 76 unpaid');
+		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 1.3333 ether) % 99 shares = 33 unpaid');
 
 		assert.equal(2, contractBalance.toNumber(), '(89 + 76 + 33) / 99 = 2 wei left');
 	});
 
-	it('unpayed 99 with 4.687411 ether', async function() {
+	it('unpaid 99 with 4.687411 ether', async function() {
 		var contract = await TestDigitalShares.new(99);
 		await contract.send(web3.toWei(4.687411, 'ether'));
 		await contract.transfer(accountTwo, 10, {from: accountOne});
@@ -403,18 +403,18 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		await contract.withdraw({from: accountThree});
 
 		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpayed = await contract.getUnpayedWei(accountOne);
-		var accountTwoUnpayed = await contract.getUnpayedWei(accountTwo);
-		var accountThreeUnpayed = await contract.getUnpayedWei(accountThree);
+		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
+		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
+		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
 
-		assert.equal(80, accountOneUnpayed.toNumber(), '(56 shares * 4.687411 ether) % 99 shares = 80 unpayed');
-		assert.equal(85, accountTwoUnpayed.toNumber(), '(10 shares * 4.687411 ether) % 99 shares = 85 unpayed');
-		assert.equal(33, accountThreeUnpayed.toNumber(), '(33 shares * 4.687411 ether) % 99 shares = 33 unpayed');
+		assert.equal(80, accountOneUnpaid.toNumber(), '(56 shares * 4.687411 ether) % 99 shares = 80 unpaid');
+		assert.equal(85, accountTwoUnpaid.toNumber(), '(10 shares * 4.687411 ether) % 99 shares = 85 unpaid');
+		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 4.687411 ether) % 99 shares = 33 unpaid');
 
 		assert.equal(2, contractBalance.toNumber(), '(80 + 85 + 33) / 99 = 2 wei left');
 	});
 
-	it('unpayed 999 with 1.1 ether', async function() {
+	it('unpaid 999 with 1.1 ether', async function() {
 		var contract = await TestDigitalShares.new(999);
 		await contract.send(web3.toWei(1.1, 'ether'));
 		await contract.transfer(accountTwo, 111, {from: accountOne});
@@ -427,13 +427,13 @@ contract('DigitalShares distribute small amounts of wei', async function(account
 		await contract.withdraw({from: accountThree});
 
 		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpayed = await contract.getUnpayedWei(accountOne);
-		var accountTwoUnpayed = await contract.getUnpayedWei(accountTwo);
-		var accountThreeUnpayed = await contract.getUnpayedWei(accountThree);
+		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
+		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
+		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
 
-		assert.equal(111, accountOneUnpayed.toNumber(), '(555 shares * 1.1 ether) % 999 shares = 111 unpayed');
-		assert.equal(222, accountTwoUnpayed.toNumber(), '(111 shares * 1.1 ether) % 999 shares = 222 unpayed');
-		assert.equal(666, accountThreeUnpayed.toNumber(), '(333 shares * 1.1 ether) % 999 shares = 666 unpayed');
+		assert.equal(111, accountOneUnpaid.toNumber(), '(555 shares * 1.1 ether) % 999 shares = 111 unpaid');
+		assert.equal(222, accountTwoUnpaid.toNumber(), '(111 shares * 1.1 ether) % 999 shares = 222 unpaid');
+		assert.equal(666, accountThreeUnpaid.toNumber(), '(333 shares * 1.1 ether) % 999 shares = 666 unpaid');
 
 		assert.equal(1, contractBalance.toNumber(), '(111 + 222 + 666) / 999 = 1 wei left');
 	});

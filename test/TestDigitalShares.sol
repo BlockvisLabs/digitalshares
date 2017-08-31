@@ -17,7 +17,7 @@ contract TestDigitalShares is DigitalShares {
 		return uint256(shares);
 	}
 
-	function getCalculatedSharesUsingPayed() constant returns (uint256) {
+	function getCalculatedSharesUsingPaid() constant returns (uint256) {
 		int256 shares = 0;
 		for (uint256 i = lastPaidDistribution[msg.sender]; i < distributions.length; i++) {
 			Snapshot storage snapshot = distributions[i];
@@ -31,7 +31,7 @@ contract TestDigitalShares is DigitalShares {
 		return distributions[index].shares[msg.sender];
 	}
 
-	function getUnpayedWei(address holder) constant returns (uint256) {
+	function getUnpaidWei(address holder) constant returns (uint256) {
 		return unpaidWei[holder];
 	}
 
