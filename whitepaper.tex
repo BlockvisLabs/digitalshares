@@ -16,21 +16,21 @@
 
 \author{
 {\rm Anatoly Ressin}\\
-BlockVis\\
+Blockvis\\
 a@blockvis.com
 \and
 {\rm Simon Yakunin}\\
-BlockVis\\
+Blockvis\\
 s@blockvis.com
 }
 
 \maketitle
 
 \subsection*{Abstract}
-The authors introduce Digital Shares, a ERC-20  compatible Ethereum contract which can distribute organization profit between unlimited number of shareholders. The main problem with such contracts is the limited amount of gas available for use in one transaction. When we have limited amount of gas and (potentially) unlimited number of shareholders then we have a problem. To distribute organization profit, contract needs to iterate all shareholders and calculate his/her profit amount according to number of shares. We propose a solution to overcome this issue.
+The authors introduce Digital Shares, a ERC-20  compatible Ethereum contract which can distribute organization profit between unlimited number of shareholders. The main problem with such contracts is the limited amount of gas available for use in one transaction. When we have limited amount of gas and (potentially) unlimited number of shareholders then we have a problem. To distribute organization profit, contract needs to iterate all shareholders and calculate each holder profit amount according to number of shares. We propose a solution to overcome this issue.
 
 \section{Introduction}
-Digital Shares contract is a solution to overcome issues which are arising when organization needs to distribute profit between shareholders on Ethereum  \cite{ethereum} blockchain.
+Digital Shares contract is a solution to overcome issues which are arising when organization needs to distribute profit between shareholders on Ethereum \cite{ethereum} blockchain.
 
 ERC-20 \cite{erc20} token stores share distribution in a mapping and allowes shareholders to transfer shares between each other. In Ethereum mapping data type is not iterable. So to overcome this, contract needs to store a list of shareholders addresses. When profit distribution occurs a contract must iterate over shareholder list and distribute profit according to number of shares which each particular shareholder have. When there are small number of shareholder this scheme works, but when number of shareholders grows, transaction, which distributes profit, runs out of gas. There are some possible solutions to overcome this. Contract can distribute profit in batches by 100 or 200 shareholders and store an index of last distributed shareholder, so when distribution method is called again the distribution resumes iteration from the last saved index. This solution is very limited. When there are, for example, 10000 shareholders we must run 10000 / 200 = 500 transactions. A contract must also stop all share transfers until all shareholders did not receive their profit. 500 transactions on Ethereum blockchain will run for about 17s * 500tx = 2 hours. And this number will grow as long as the number of shareholders grows.
 
