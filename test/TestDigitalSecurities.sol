@@ -1,16 +1,16 @@
-pragma solidity ^0.4.15;
+pragma solidity 0.4.23;
 
-import "../contracts/DigitalSecurities.sol";
+import "../contracts/DigitalSecuritiesToken.sol";
 
-contract TestDigitalSecurities is DigitalSecurities {
-	function TestDigitalSecurities(uint256 _totalShares) DigitalSecurities(_totalShares) {
+contract TestDigitalSecurities is DigitalSecuritiesToken {
+	constructor(uint256 _totalShares) public DigitalSecuritiesToken(_totalShares) {
 	}
 
-	function getReserved() constant returns (uint256) {
+	function getReserved() public view returns (uint256) {
 		return reserved;
 	}
 
-	function getUnpaidWei(address holder) constant returns (uint256) {
+	function getUnpaidWei(address holder) public view returns (uint256) {
 		return accounts[holder].remainder;
 	}
 }

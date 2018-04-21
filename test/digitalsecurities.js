@@ -1,182 +1,171 @@
-var TestDigitalSecurities = artifacts.require("test/TestDigitalSecurities.sol");
+const BigNumber = require('bignumber.js');
 
-contract('DigitalSecurities', async function(accounts) {
-	var contract;
-	var accountOne = accounts[0];
-	var accountTwo = accounts[1];
+const chai = require('chai');
+chai.use(require('chai-as-promised'));
+chai.use(require('chai-bignumber')(BigNumber));
 
-	beforeEach(async function() {
-		contract = await TestDigitalSecurities.new(10000);
-		await contract.send(web3.toWei(10, 'ether'));
+const expect = chai.expect;
+
+const TestDigitalSecurities = artifacts.require("test/TestDigitalSecurities.sol");
+
+const OneEther = new BigNumber(web3.toWei(1, 'ether'));
+const OneToken = new BigNumber(1);
+
+contract('DigitalSecurities', async (accounts) => {
+	let contract;
+	let accountOne = accounts[0];
+	let accountTwo = accounts[1];
+
+	beforeEach(async () => {
+		contract = await TestDigitalSecurities.new(OneToken.mul(10000));
+		await contract.send(OneEther.mul(10));
 	});
 
-	it('should successfully create contract', async function() {
-		var shares = await contract.balanceOf.call(accountOne);
+	it('should successfully create contract', async () => expect(await contract.balanceOf(accountOne)).to.be.bignumber.equal(OneToken.mul(10000)));
 
-		assert.equal(shares.toNumber(), 10000, 'account should have 10000 shares');
+	it('should successfully send shares', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(1000), {from: accountOne});
+
+        expect(await contract.balanceOf(accountOne)).to.be.bignumber.equal(OneToken.mul(9000));
+        expect(await contract.balanceOf(accountTwo)).to.be.bignumber.equal(OneToken.mul(1000));
 	});
 
-	it('should successfully send shares', async function() {
-		var tx = await contract.transfer(accountTwo, 1000, {from: accountOne});
-
-		var accountOneBalance = await contract.balanceOf.call(accountOne);
-		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
-		assert.equal(accountOneBalance.toNumber(), 9000, 'Owner should have 9000 shares');
-		assert.equal(accountTwoBalance.toNumber(), 1000, 'Account 2 should have 1000 shares');
+	it('should not send more shares than actually have', async () => {
+        await expect(contract.transfer(accountTwo, OneToken.mul(10001), {from: accountOne})).eventually.rejected;
 	});
 
-	it('should not send more shares than actually have', async function() {
-		try {
-			var tx = await contract.transfer(accountTwo, 10001, {from: accountOne});
-		} catch(e) {} // testrpc throws 'invalid opcode' on assert()
+	it('should distribute dividends', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(1000), {from: accountOne});
+		await contract.distribute(OneEther.mul(10), {from: accountOne});
 
-		var accountOneBalance = await contract.balanceOf.call(accountOne);
-		var accountTwoBalance = await contract.balanceOf.call(accountTwo);
-		assert.equal(accountOneBalance.toNumber(), 10000, 'Owner should have 10000 shares');
-		assert.equal(accountTwoBalance.toNumber(), 0, 'Account 2 should have 0 shares');
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(OneEther.mul(9));
+        expect(await contract.getDividends(accountTwo)).to.be.bignumber.equal(OneEther);
 	});
 
-	it('should distribute dividends', async function() {
-		await contract.transfer(accountTwo, 1000, {from: accountOne});
-		await contract.distribute(web3.toWei(10, 'ether'), {from: accountOne});
-		var accountOneAmount = await contract.getDividends.call(accountOne);
-		var accountTwoAmount = await contract.getDividends.call(accountTwo);
+	it('should fail to distribute more dividends than have ether on balance', async () => {
+		await expect(contract.distribute(OneEther.mul(10).add(1), {from: accountOne})).eventually.rejected;
 
-		assert.equal(web3.fromWei(accountOneAmount.toNumber(), 'ether'), 9, 'should receive 9 ether according to shares');
-		assert.equal(web3.fromWei(accountTwoAmount.toNumber(), 'ether'), 1, 'should receive 1 ether according to shares');
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(0);
 	});
 
-	it('should fail to distribute more dividends than have ether on balance', async function() {
-		await contract.distribute(web3.toWei(10, 'ether') + 1, {from: accountOne});
-		var accountOneAmount = await contract.getDividends.call(accountOne);
-		assert.equal(accountOneAmount.toNumber(), 0, 'should not distribute');
+	it('transfer -> no distribute', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), { from: accountOne });
+
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(0);
 	});
 
-	it('transfer -> no distribute', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
+	it('transfer -> distribute', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const balanceBeforeOne = await contract.getDividends(accountOne);
+		const balanceBeforeTwo = await contract.getDividends(accountTwo);
 
-		var balanceBefore = await contract.getDividends.call(accountOne);
-		assert.equal(balanceBefore.toNumber(), 0, 'should be no dividends before distribution');
+		await contract.distribute(OneEther, {from: accountOne});
+        const balanceAfterOne = await contract.getDividends(accountOne);
+		const balanceAfterTwo = await contract.getDividends(accountTwo);
+
+        expect(balanceAfterOne.sub(balanceBeforeOne)).to.be.bignumber.equal(OneEther.mul(0.5));
+        expect(balanceAfterTwo.sub(balanceBeforeTwo)).to.be.bignumber.equal(OneEther.mul(0.5));
 	});
 
-	it('transfer -> distribute', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var balanceBeforeOne = await contract.getDividends.call(accountOne);
-		var balanceBeforeTwo = await contract.getDividends.call(accountTwo);
-		await contract.distribute(web3.toWei(1, 'ether'), {from: accountOne});
+	it('transfer -> distribute -> distribute', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const balanceBeforeOne = await contract.getDividends(accountOne);
+		const balanceBeforeTwo = await contract.getDividends(accountTwo);
+		await contract.distribute(OneEther, {from: accountOne});
+		await contract.distribute(OneEther, {from: accountOne});
 
-		var balanceAfterOne = await contract.getDividends.call(accountOne);
-		var balanceAfterTwo = await contract.getDividends.call(accountTwo);
-		assert.equal(web3.fromWei(balanceAfterOne.toNumber() - balanceBeforeOne.toNumber(), 'ether'), 0.5, 'should distribute equally');
-		assert.equal(web3.fromWei(balanceAfterTwo.toNumber() - balanceBeforeTwo.toNumber(), 'ether'), 0.5, 'should distribute equally');
+		const balanceAfterOne = await contract.getDividends(accountOne);
+		const balanceAfterTwo = await contract.getDividends(accountTwo);
+
+        expect(balanceAfterOne.sub(balanceBeforeOne)).to.be.bignumber.equal(OneEther);
+        expect(balanceAfterTwo.sub(balanceBeforeTwo)).to.be.bignumber.equal(OneEther);
 	});
 
-	it('transfer -> distribute -> distribute', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var balanceBeforeOne = await contract.getDividends.call(accountOne);
-		var balanceBeforeTwo = await contract.getDividends.call(accountTwo);
-		await contract.distribute(web3.toWei(1, 'ether'), {from: accountOne});
-		await contract.distribute(web3.toWei(1, 'ether'), {from: accountOne});
+	it('withdraw', async () => {
+		const accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
+		await contract.withdraw({from: accountTwo});
 
-		var balanceAfterOne = await contract.getDividends.call(accountOne);
-		var balanceAfterTwo = await contract.getDividends.call(accountTwo);
-		assert.equal(web3.fromWei(balanceAfterOne.toNumber() - balanceBeforeOne.toNumber(), 'ether'), 1, 'should distribute equally');
-		assert.equal(web3.fromWei(balanceAfterTwo.toNumber() - balanceBeforeTwo.toNumber(), 'ether'), 1, 'should distribute equally');
+        expect(await web3.eth.getBalance(accountTwo)).to.be.bignumber.below(accountTwoBalanceBefore);
 	});
 
-	it('withdraw', async function() {
-		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
-		var tx = await contract.withdraw({from: accountTwo});
+	it('transfer -> withdraw', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const accountOneBalanceBefore = await web3.eth.getBalance(accountOne);
 
-		var accountTwoBalanceAfter = await web3.eth.getBalance(accountTwo);
-		assert.isBelow(accountTwoBalanceAfter.toNumber(), accountTwoBalanceBefore.toNumber(), 'after balance must be lower than before');
+        await contract.withdraw({from: accountOne});
+
+        expect(await web3.eth.getBalance(accountOne)).to.be.bignumber.below(accountOneBalanceBefore);
 	});
 
-	it('transfer -> withdraw', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var accountOneBalanceBefore = await web3.eth.getBalance(accountOne);
-		var tx = await contract.withdraw({from: accountOne});
+	it('transfer -> distribute -> withdraw', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
+		await contract.distribute(OneEther);
+		await contract.withdraw({from: accountTwo});
 
-		var accountOneBalanceAfter = await web3.eth.getBalance(accountOne);
-		assert.isBelow(accountOneBalanceAfter.toNumber(), accountOneBalanceBefore.toNumber(), 'after balance must be lower than before');
-	});
-
-	it('transfer -> distribute -> withdraw', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
-		await contract.distribute(web3.toWei(1, 'ether'));
-		var tx = await contract.withdraw({from: accountTwo});
-
-		var accountTwoBalanceAfter = await web3.eth.getBalance(accountTwo);
+		const accountTwoBalanceAfter = await web3.eth.getBalance(accountTwo);
 		console.log('Before: ' + web3.fromWei(accountTwoBalanceBefore.toNumber(), 'ether'));
 		console.log('After: ' + web3.fromWei(accountTwoBalanceAfter.toNumber(), 'ether'));
-		assert.isAbove(accountTwoBalanceAfter.toNumber(), accountTwoBalanceBefore.toNumber(), 'after balance must be higher than before');
+
+        expect(accountTwoBalanceAfter).to.be.bignumber.above(accountTwoBalanceBefore);
 	});
 
-	it('transfer -> distribute -> distribute -> withdraw', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
-		await contract.distribute(web3.toWei(1, 'ether'));
-		await contract.distribute(web3.toWei(1, 'ether'));
-		var tx = await contract.withdraw({from: accountTwo});
+	it('transfer -> distribute -> distribute -> withdraw', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
+		await contract.distribute(OneEther);
+		await contract.distribute(OneEther);
+		await contract.withdraw({from: accountTwo});
 
-		var accountTwoBalanceAfter = await web3.eth.getBalance(accountTwo);
+		const accountTwoBalanceAfter = await web3.eth.getBalance(accountTwo);
 		console.log('Before: ' + web3.fromWei(accountTwoBalanceBefore.toNumber(), 'ether'));
 		console.log('After: ' + web3.fromWei(accountTwoBalanceAfter.toNumber(), 'ether'));
-		assert.isAbove(accountTwoBalanceAfter.toNumber(), accountTwoBalanceBefore.toNumber(), 'after balance must be higher than before');
+        expect(accountTwoBalanceAfter).to.be.bignumber.above(accountTwoBalanceBefore);
 	});
 
-	it('transfer -> distribute -> withdraw -> withdraw', async function() {
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		var accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
-		await contract.distribute(web3.toWei(1, 'ether'));
-		var tx = await contract.withdraw({from: accountTwo});
+	it('transfer -> distribute -> withdraw -> withdraw', async () => {
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		const accountTwoBalanceBefore = await web3.eth.getBalance(accountTwo);
+		await contract.distribute(OneEther);
+		await contract.withdraw({from: accountTwo}); // this call receives distributed ether
 
-		var accountTwoBalanceAfter1 = await web3.eth.getBalance(accountTwo);
+		const accountTwoBalanceAfter1 = await web3.eth.getBalance(accountTwo);
 		console.log('Before: ' + web3.fromWei(accountTwoBalanceBefore.toNumber(), 'ether'));
 		console.log('After 1: ' + web3.fromWei(accountTwoBalanceAfter1.toNumber(), 'ether'));
-		var tx = await contract.withdraw({from: accountTwo});
+		await contract.withdraw({from: accountTwo}); // this call only consumes gas
 
-		var accountTwoBalanceAfter2 = await web3.eth.getBalance(accountTwo);
+		const accountTwoBalanceAfter2 = await web3.eth.getBalance(accountTwo);
 		console.log('After 2: ' + web3.fromWei(accountTwoBalanceAfter2.toNumber(), 'ether'));
-		assert.isAbove(accountTwoBalanceAfter1.toNumber(), accountTwoBalanceAfter2.toNumber(), 'after 1 withdraw balance must be higher than after 2 withdraw');
+        expect(accountTwoBalanceAfter1).to.be.bignumber.above(accountTwoBalanceAfter2);
 	});
 
-	it('transfer -> distribute -> transfer -> distribute', async function() {
-		var accountThree = accounts[2];
-		await contract.transfer(accountTwo, 5000, {from: accountOne});
-		await contract.distribute(web3.toWei(1, 'ether'));
-		await contract.transfer(accountThree, 5000, {from: accountTwo});
-		await contract.distribute(web3.toWei(1, 'ether'));
+	it('transfer -> distribute -> transfer -> distribute', async () => {
+		const accountThree = accounts[2];
+		await contract.transfer(accountTwo, OneToken.mul(5000), {from: accountOne});
+		await contract.distribute(OneEther);
+		await contract.transfer(accountThree, OneToken.mul(5000), {from: accountTwo});
+		await contract.distribute(OneEther);
 
-		var accountOneBalance = await contract.getDividends.call( accountOne );
-		var accountTwoBalance = await contract.getDividends.call( accountTwo );
-		var accountThreeBalance = await contract.getDividends.call( accountThree );
-		assert.equal(web3.fromWei(accountOneBalance.toNumber(), 'ether'), 1, 'first account must have 1 ether dividends');
-		assert.equal(web3.fromWei(accountTwoBalance.toNumber(), 'ether'), 0.5, 'second account must have 0.5 ether dividends');
-		assert.equal(web3.fromWei(accountThreeBalance.toNumber(), 'ether'), 0.5, 'third account must have 0.5 ether dividends');
-	});
-
-	it('after distribute->transfer cycle snapshot must hold data ', async function() {
-		for (var i = 0; i < 3; i++) {
-			await contract.distribute(web3.toWei(1, 'ether'));
-			await contract.transfer(accountTwo, 10, {from: accountOne});
-		}
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(OneEther);
+        expect(await contract.getDividends(accountTwo)).to.be.bignumber.equal(OneEther.mul(0.5));
+        expect(await contract.getDividends(accountThree)).to.be.bignumber.equal(OneEther.mul(0.5));
 	});
 });
 
 contract('DigitalSecurities distribute small amounts of wei', async function(accounts) {
-	var accountOne 		= accounts[0];
-	var accountTwo 		= accounts[1];
-	var accountThree 	= accounts[2];
+	const accountOne 		= accounts[0];
+	const accountTwo 		= accounts[1];
+    const accountThree 	       = accounts[2];
 
-	it('transfer -> distribute', async function() {
-		var	contract = await TestDigitalSecurities.new(10);
-		await contract.send(10);
-		await contract.transfer(accountTwo, 	3, {from: accountOne});
-		await contract.transfer(accountThree, 2, {from: accountOne});
-		for (var i = 0; i < 5; i++) {
-			await contract.distribute(1);
+	it('transfer -> distribute', async () => {
+		var	contract = await TestDigitalSecurities.new(OneToken.mul(10));
+		await contract.send(10); // 10 wei
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(3), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(2), {from: accountOne})
+        ]);
+		for (let i = 0; i < 5; i++) {
+			await contract.distribute(1); // one wei
 		}
 
 		/**
@@ -190,33 +179,32 @@ contract('DigitalSecurities distribute small amounts of wei', async function(acc
 		 * accountTwo: 		(3 * 5) / 10 = 1, 0.5 wei left
 		 * accountThree: 	(2 * 5) / 10 = 1, 0 wei left
 		 */
-		var accountOneBalance = await contract.getDividends.call( accountOne );
-		var accountTwoBalance = await contract.getDividends.call( accountTwo );
-		var accountThreeBalance = await contract.getDividends.call( accountThree );
-		assert.equal(accountOneBalance.toNumber(), 2, 'first account must have 2 wei dividends');
-		assert.equal(accountTwoBalance.toNumber(), 1, 'second account must have 1 wei dividends');
-		assert.equal(accountThreeBalance.toNumber(), 1, 'third account must have 1 wei dividends');
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(2);
+        expect(await contract.getDividends(accountTwo)).to.be.bignumber.equal(1);
+        expect(await contract.getDividends(accountThree)).to.be.bignumber.equal(1);
 	});
 
-	it('transfer -> distribute -> withdraw -> distribute -> withdraw', async function() {
-		var	contract = await TestDigitalSecurities.new(10);
+	it('transfer -> distribute -> withdraw -> distribute -> withdraw', async () => {
+		var	contract = await TestDigitalSecurities.new(OneToken.mul(10));
 		await contract.send(10);
-		await contract.transfer(accountTwo, 	3, {from: accountOne});
-		await contract.transfer(accountThree, 2, {from: accountOne});
-		for (var i = 0; i < 5; i++) {
-			await contract.distribute(1);
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(3), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(2), {from: accountOne})
+        ]);
+		for (let i = 0; i < 5; i++) {
+			await contract.distribute(1); // 1 wei
 		}
 		/**
 		 * same share and dividend distribution as above
 		 */
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+    		contract.withdraw({from: accountTwo}),
+    		contract.withdraw({from: accountThree})
+        ]);
+        expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(6); // contract should have 6 wei left
 
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		assert.equal(contractBalance.toNumber(), 6, 'contract should have 6 wei left');
-
-		for (var i = 0; i < 5; i++) {
+		for (let i = 0; i < 5; i++) {
 			await contract.distribute(1);
 		}
 
@@ -227,195 +215,144 @@ contract('DigitalSecurities distribute small amounts of wei', async function(acc
 		 * accountThree: 0 wei + (2 * 5) / 10 = 1, 0 wei left
 		 */
 
-		var accountOneBalance = await contract.getDividends.call( accountOne );
-		var accountTwoBalance = await contract.getDividends.call( accountTwo );
-		var accountThreeBalance = await contract.getDividends.call( accountThree );
+        expect(await contract.getDividends(accountOne)).to.be.bignumber.equal(3);
+        expect(await contract.getDividends(accountTwo)).to.be.bignumber.equal(2);
+        expect(await contract.getDividends(accountThree)).to.be.bignumber.equal(1);
 
-		assert.equal(accountOneBalance.toNumber(), 3, 'first account must have 3 wei dividends');
-		assert.equal(accountTwoBalance.toNumber(), 2, 'second account must have 2 wei dividends');
-		assert.equal(accountThreeBalance.toNumber(), 1, 'third account must have 1 wei dividends');
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
-
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		assert.equal(contractBalance.toNumber(), 0, 'contract should have no wei left');
+        expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(0);
 	});
 
-	it('undistributed', async function() {
-		var contract = await TestDigitalSecurities.new(30);
-		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transfer(accountTwo, 10, {from: accountOne});
-		await contract.transfer(accountThree, 10, {from: accountOne});
+	it('undistributed', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(30));
+		await contract.send(OneEther);
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(10), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(10), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(1, 'ether'));
+		await contract.distribute(OneEther);
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		assert.equal(contractBalance.toNumber(), 1, 'contract should have 1 wei left');
-		var undistributed = await contract.getReserved.call();
-		assert.equal(undistributed.toNumber(), 1, 'contract should have 1 wei undistributed');
+        expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(1);
+        expect(await contract.getReserved()).to.be.bignumber.equal(1);
 	});
 
-	it('unpaid 30', async function() {
-		var contract = await TestDigitalSecurities.new(30);
-		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transfer(accountTwo, 10, {from: accountOne});
-		await contract.transfer(accountThree, 10, {from: accountOne});
+	it('unpaid 30', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(30));
+		await contract.send(OneEther);
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(10), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(10), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(1, 'ether'));
+		await contract.distribute(OneEther);
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
-		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
-		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
-
-		assert.equal(10, accountOneUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
-		assert.equal(10, accountTwoUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
-		assert.equal(10, accountThreeUnpaid.toNumber(), '(10 shares * 1 ether) % 30 shares = 10 unpaid');
+		expect(await contract.getUnpaidWei(accountOne)).to.be.bignumber.equal(10); // (10 shares * 1 ether) % 30 shares = 10 unpaid
+		expect(await contract.getUnpaidWei(accountTwo)).to.be.bignumber.equal(10); // (10 shares * 1 ether) % 30 shares = 10 unpaid
+		expect(await contract.getUnpaidWei(accountThree)).to.be.bignumber.equal(10); // (10 shares * 1 ether) % 30 shares = 10 unpaid
 	});
 
-	it('unpaid 99', async function() {
-		var contract = await TestDigitalSecurities.new(99);
-		await contract.send(web3.toWei(1, 'ether'));
-		await contract.transfer(accountTwo, 10, {from: accountOne});
-		await contract.transfer(accountThree, 33, {from: accountOne});
+	it('unpaid 99', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(99));
+		await contract.send(OneEther);
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(10), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(33), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(1, 'ether'));
+		await contract.distribute(OneEther);
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
-		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
-		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
-
-		assert.equal(56, accountOneUnpaid.toNumber(), '(56 shares * 1 ether) % 99 shares = 56 unpaid');
-		assert.equal(10, accountTwoUnpaid.toNumber(), '(10 shares * 1 ether) % 99 shares = 10 unpaid');
-		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 1 ether) % 99 shares = 33 unpaid');
+		expect(await contract.getUnpaidWei(accountOne)).to.be.bignumber.equal(56); // (56 shares * 1 ether) % 99 shares = 56 unpaid
+		expect(await contract.getUnpaidWei(accountTwo)).to.be.bignumber.equal(10); // (10 shares * 1 ether) % 99 shares = 10 unpaid
+		expect(await contract.getUnpaidWei(accountThree)).to.be.bignumber.equal(33); // (33 shares * 1 ether) % 99 shares = 33 unpaid
 	});
 
-	it('unpaid 99 with 1.3333 ether', async function() {
-		var contract = await TestDigitalSecurities.new(99);
-		await contract.send(web3.toWei(1.3333, 'ether'));
-		await contract.transfer(accountTwo, 10, {from: accountOne});
-		await contract.transfer(accountThree, 33, {from: accountOne});
+	it('unpaid 99 with 1.3333 ether', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(99));
+		await contract.send(OneEther.mul(1.3333));
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(10), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(33), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(1.3333, 'ether'));
+		await contract.distribute(OneEther.mul(1.3333));
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
-		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
-		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
-
-		assert.equal(89, accountOneUnpaid.toNumber(), '(56 shares * 1.3333 ether) % 99 shares = 89 unpaid');
-		assert.equal(76, accountTwoUnpaid.toNumber(), '(10 shares * 1.3333 ether) % 99 shares = 76 unpaid');
-		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 1.3333 ether) % 99 shares = 33 unpaid');
-
-		assert.equal(2, contractBalance.toNumber(), '(89 + 76 + 33) / 99 = 2 wei left');
+		expect(await contract.getUnpaidWei(accountOne)).to.be.bignumber.equal(89); // (56 shares * 1.3333 ether) % 99 shares = 89 unpaid'
+		expect(await contract.getUnpaidWei(accountTwo)).to.be.bignumber.equal(76); // (10 shares * 1.3333 ether) % 99 shares = 76 unpaid'
+		expect(await contract.getUnpaidWei(accountThree)).to.be.bignumber.equal(33); // (33 shares * 1.3333 ether) % 99 shares = 33 unpaid'
+		expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(2); // (89 + 76 + 33) / 99 = 2 wei left'
 	});
 
-	it('unpaid 99 with 4.687411 ether', async function() {
-		var contract = await TestDigitalSecurities.new(99);
-		await contract.send(web3.toWei(4.687411, 'ether'));
-		await contract.transfer(accountTwo, 10, {from: accountOne});
-		await contract.transfer(accountThree, 33, {from: accountOne});
+	it('unpaid 99 with 4.687411 ether', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(99));
+		await contract.send(OneEther.mul(4.687411));
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(10), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(33), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(4.687411, 'ether'));
+		await contract.distribute(OneEther.mul(4.687411));
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
-		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
-		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
-
-		assert.equal(80, accountOneUnpaid.toNumber(), '(56 shares * 4.687411 ether) % 99 shares = 80 unpaid');
-		assert.equal(85, accountTwoUnpaid.toNumber(), '(10 shares * 4.687411 ether) % 99 shares = 85 unpaid');
-		assert.equal(33, accountThreeUnpaid.toNumber(), '(33 shares * 4.687411 ether) % 99 shares = 33 unpaid');
-
-		assert.equal(2, contractBalance.toNumber(), '(80 + 85 + 33) / 99 = 2 wei left');
+		expect(await contract.getUnpaidWei(accountOne)).to.be.bignumber.equal(80); // (56 shares * 4.687411 ether) % 99 shares = 80 unpaid
+		expect(await contract.getUnpaidWei(accountTwo)).to.be.bignumber.equal(85); // (10 shares * 4.687411 ether) % 99 shares = 85 unpaid
+		expect(await contract.getUnpaidWei(accountThree)).to.be.bignumber.equal(33); // (33 shares * 4.687411 ether) % 99 shares = 33 unpaid
+		expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(2); // (80 + 85 + 33) / 99 = 2 wei left
 	});
 
-	it('unpaid 999 with 1.1 ether', async function() {
-		var contract = await TestDigitalSecurities.new(999);
-		await contract.send(web3.toWei(1.1, 'ether'));
-		await contract.transfer(accountTwo, 111, {from: accountOne});
-		await contract.transfer(accountThree, 333, {from: accountOne});
+	it('unpaid 999 with 1.1 ether', async () => {
+		const contract = await TestDigitalSecurities.new(OneToken.mul(999));
+		await contract.send(OneEther.mul(1.1));
+        await Promise.all([
+            contract.transfer(accountTwo, OneToken.mul(111), {from: accountOne}),
+            contract.transfer(accountThree, OneToken.mul(333), {from: accountOne})
+        ]);
 
-		await contract.distribute(web3.toWei(1.1, 'ether'));
+		await contract.distribute(OneEther.mul(1.1));
 
-		await contract.withdraw({from: accountOne});
-		await contract.withdraw({from: accountTwo});
-		await contract.withdraw({from: accountThree});
+        await Promise.all([
+            contract.withdraw({from: accountOne}),
+            contract.withdraw({from: accountTwo}),
+            contract.withdraw({from: accountThree})
+        ]);
 
-		var contractBalance = await web3.eth.getBalance(contract.address);
-		var accountOneUnpaid = await contract.getUnpaidWei(accountOne);
-		var accountTwoUnpaid = await contract.getUnpaidWei(accountTwo);
-		var accountThreeUnpaid = await contract.getUnpaidWei(accountThree);
-
-		assert.equal(111, accountOneUnpaid.toNumber(), '(555 shares * 1.1 ether) % 999 shares = 111 unpaid');
-		assert.equal(222, accountTwoUnpaid.toNumber(), '(111 shares * 1.1 ether) % 999 shares = 222 unpaid');
-		assert.equal(666, accountThreeUnpaid.toNumber(), '(333 shares * 1.1 ether) % 999 shares = 666 unpaid');
-
-		assert.equal(1, contractBalance.toNumber(), '(111 + 222 + 666) / 999 = 1 wei left');
+        expect(await contract.getUnpaidWei(accountOne)).to.be.bignumber.equal(111); // (555 shares * 1.1 ether) % 999 shares = 111 unpaid
+		expect(await contract.getUnpaidWei(accountTwo)).to.be.bignumber.equal(222); // (111 shares * 1.1 ether) % 999 shares = 222 unpaid
+		expect(await contract.getUnpaidWei(accountThree)).to.be.bignumber.equal(666); // (333 shares * 1.1 ether) % 999 shares = 666 unpaid
+		expect(await web3.eth.getBalance(contract.address)).to.be.bignumber.equal(1); // (111 + 222 + 666) / 999 = 1 wei left
 	});
-});
-
-contract('DigitalSecurities muldiv', async function(accounts) {
-	var contract;
-	var uint256Max = web3.toBigNumber('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-
-	beforeEach(async function() {
-		contract = await TestDigitalSecurities.new(10000);
-	});
-
-	it('must muldiv 10 / 2', async function() {
-		var result = await contract.muldiv(10, 1, 2);
-		assert.equal(5, result[0].toNumber(), '10 / 2 = 5');
-		assert.equal(0, result[1].toNumber(), '10 % 2 = 0');
-	});
-
-	it('must muldiv 10 / 3', async function() {
-		var result = await contract.muldiv(10, 1, 3);
-		assert.equal(3, result[0].toNumber(), '10 / 3 = 3');
-		assert.equal(1, result[1].toNumber(), '10 % 3 = 1');
-	});
-
-	it('must muldiv 10 * 2 / 3', async function() {
-		var result = await contract.muldiv(10, 2, 3);
-		assert.equal(6, result[0].toNumber(), '10 * 2 / 3 = 6');
-		assert.equal(2, result[1].toNumber(), '10 * 2 / 3 = 2');
-	});
-
-	it('must muldiv large', async function() {
-		var result = await contract.muldiv(uint256Max, 2, 3);
-		assert.equal(uint256Max.div(3).mul(2).toNumber(), result[0].toNumber());
-	});
-
-	it('must muldiv large', async function() {
-		var result = await contract.muldiv(uint256Max, 100, 100);
-		assert.equal(uint256Max.toNumber(), result[0].toNumber());
-		assert.equal(0, result[1].toNumber());
-	});
-	it('must muldiv large', async function() {
-		var result = await contract.muldiv(100, uint256Max.div(2), 1000);
-		console.log(result[0].toNumber());
-		console.log(result[1].toNumber());
-	});
-
 });
