@@ -59,26 +59,14 @@ contract PriorityQueue {
         uint256 data = dataStore[key];
         dataStore[key] = 0;
 
-        uint256 last;
-
+        uint256 current;
         assembly {
             let lastIndex := sub(sload(items_slot), 1) // lastIndex = items.length - 1
-            last := sload(add(arrStart, lastIndex))
-            //sstore(add(arrStart, 1), ) // items[1] = items[lastIndex]
+            current := sload(add(arrStart, lastIndex)) // current = items[lastIndex]
             sstore(add(arrStart, lastIndex), 0) // items[lastIndex] = 0
             sstore(items_slot, lastIndex) // items.length = last
         }
-        bubbleDown(last);
-        return data;
-    }
-
-    function bubbleDown(uint256 current) internal {
         uint256 itemCount = items.length;
-        uint256 arrStart;
-        assembly {
-            mstore(0x0, items_slot)
-            arrStart := keccak256(0, 32)
-        }
         uint256 currentIdx = 1;
         uint256 smallestIdx = 1;
         uint256 smallest = current;
@@ -99,9 +87,9 @@ contract PriorityQueue {
                     smallest = left;
                 }
             }
-            if (rightChildIdx < itemCount) {
+            else if (rightChildIdx < itemCount) {
                 assembly {
-                    right := sload(add(arrStart, rightChildIdx)) // left = items[rightChildIdx]
+                    right := sload(add(arrStart, rightChildIdx)) // right = items[rightChildIdx]
                 }
                 if (smallest > right) {
                     smallestIdx = rightChildIdx;
@@ -118,6 +106,7 @@ contract PriorityQueue {
         assembly {
             sstore(add(arrStart, smallestIdx), current) // items[smallestIdx] = current
         }
+        return data;
     }
 
     function min() public view returns (uint256) {
