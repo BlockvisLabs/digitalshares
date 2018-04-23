@@ -33,7 +33,7 @@ contract.only('PriorityQueue', async (accounts) => {
         await contract.takeMin();
     });
 
-    it('should store data item', async () => {
+    it('should store 2 data items', async () => {
         await contract.push(2, 50);
         await contract.push(1, 100);
 

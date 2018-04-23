@@ -3,13 +3,14 @@ pragma solidity 0.4.23;
 
 contract PriorityQueue {
 
+    uint8 public base = 8;
+
     uint256[] public items;
     mapping(uint256 => uint256) public dataStore;
 
     event Log(string message, uint256 logData);
 
     function PriorityQueue() public {
-        items.push(0);
     }
 
     function log(string message, uint256 logData) internal {
@@ -19,18 +20,17 @@ contract PriorityQueue {
     function push(uint256 key, uint256 data) public {
         dataStore[key] = data;
         assembly {
-
-            sstore(items_slot, add(sload(items_slot), 1)) // items.length++
-
-            let currentIdx := sub(sload(items_slot), 1) // currentIdx = items.length - 1
-            if eq(currentIdx, 0) { return (0, 0) } // if (currentIdx == 0) return;
+            let heapBase := sload(base_slot) // heapBase = base
+            let currentIdx := sload(items_slot) // currentIdx = items.length
+            sstore(items_slot, add(currentIdx, 1)) // items.length++
 
             mstore(0x0, items_slot)
             let arrStart := keccak256(0, 32)
             let parentIdx := currentIdx
 
             for {} gt(currentIdx, 0) {} { // while (currentIdx > 0)
-                parentIdx := div(parentIdx, 2) // parentIdx = parentIdx / 2
+                parentIdx := div(sub(currentIdx, 1), heapBase) // parentIdx = (parentIdx - 1) / base
+
                 let parent := sload(add(arrStart, parentIdx)) // parent = items[parentIdx]
                 switch gt(parent, key) // if parent > key
                 case 1 {
@@ -39,7 +39,7 @@ contract PriorityQueue {
                 }
                 default { // else
                     sstore(add(arrStart, currentIdx), key) // items[currentIdx] = key
-                    return (0, 0) // break
+                    return (0, 0) // return;
                 }
             }
             sstore(add(arrStart, currentIdx), key) // items[currentIdx] = current
@@ -47,53 +47,53 @@ contract PriorityQueue {
     }
 
     function takeMin() public returns (uint256) {
-        if (items.length < 2) return 0;
+        if (items.length == 0) return 0;
 
         uint256 arrStart;
         uint256 key;
+        uint256 heapBase = base;
         assembly {
             mstore(0x0, items_slot)
             arrStart := keccak256(0, 32)
-            key := sload(add(arrStart, 1)) // key = items[1]
+            key := sload(arrStart) // key = items[0]
         }
         uint256 data = dataStore[key];
         dataStore[key] = 0;
 
+        uint256 itemCount;
         uint256 current;
         assembly {
             let lastIndex := sub(sload(items_slot), 1) // lastIndex = items.length - 1
             current := sload(add(arrStart, lastIndex)) // current = items[lastIndex]
             sstore(add(arrStart, lastIndex), 0) // items[lastIndex] = 0
-            sstore(items_slot, lastIndex) // items.length = last
+            sstore(items_slot, lastIndex) // items.length = lastIndex
+            itemCount := lastIndex
         }
-        uint256 itemCount = items.length;
-        uint256 currentIdx = 1;
-        uint256 smallestIdx = 1;
+
+        if (itemCount == 0) return data;
+
+        uint256 currentIdx = 0;
+        uint256 smallestIdx = 0;
         uint256 smallest = current;
-        uint256 leftChildIdx;
-        uint256 rightChildIdx;
-        uint256 left;
-        uint256 right;
+        uint256 child;
+        uint256 idx;
+        uint256 idxBase;
+        uint8 i;
 
         while (true) {
-            leftChildIdx = 2 * currentIdx;
-            rightChildIdx = leftChildIdx + 1;
-            if (leftChildIdx < itemCount) {
-                assembly {
-                    left := sload(add(arrStart, leftChildIdx)) // left = items[leftChildIdx]
-                }
-                if (smallest > left) {
-                    smallestIdx = leftChildIdx;
-                    smallest = left;
-                }
-            }
-            else if (rightChildIdx < itemCount) {
-                assembly {
-                    right := sload(add(arrStart, rightChildIdx)) // right = items[rightChildIdx]
-                }
-                if (smallest > right) {
-                    smallestIdx = rightChildIdx;
-                    smallest = right;
+            idxBase = heapBase * currentIdx;
+            for (i = 1; i <= heapBase; i++) {
+                idx = idxBase + i;
+                if (idx < itemCount) {
+                    assembly {
+                        child := sload(add(arrStart, idx))
+                    }
+                    if (smallest > child) {
+                        smallestIdx = idx;
+                        smallest = child;
+                    }
+                } else {
+                    break;
                 }
             }
             if (smallestIdx == currentIdx) break;
@@ -111,10 +111,10 @@ contract PriorityQueue {
 
     function min() public view returns (uint256) {
         if (items.length == 0) return 0;
-        return dataStore[items[1]];
+        return dataStore[items[0]];
     }
 
     function size() public view returns (uint256) {
-        return items.length - 1;
+        return items.length;
     }
 }
