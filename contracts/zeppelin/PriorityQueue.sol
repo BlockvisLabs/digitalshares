@@ -3,7 +3,7 @@ pragma solidity 0.4.23;
 
 contract PriorityQueue {
 
-    uint8 public base = 8;
+    uint8 public constant BASE = 8;
 
     uint256[] public items;
     mapping(uint256 => uint256) public dataStore;
@@ -13,14 +13,19 @@ contract PriorityQueue {
     function PriorityQueue() public {
     }
 
-    function log(string message, uint256 logData) internal {
-        emit Log(message, logData);
+    function min() public view returns (uint256) {
+        if (items.length == 0) return 0;
+        return dataStore[items[0]];
+    }
+
+    function size() public view returns (uint256) {
+        return items.length;
     }
 
     function push(uint256 key, uint256 data) public {
         dataStore[key] = data;
+        uint8 heapBase = BASE;
         assembly {
-            let heapBase := sload(base_slot) // heapBase = base
             let currentIdx := sload(items_slot) // currentIdx = items.length
             sstore(items_slot, add(currentIdx, 1)) // items.length++
 
@@ -29,7 +34,7 @@ contract PriorityQueue {
             let parentIdx := currentIdx
 
             for {} gt(currentIdx, 0) {} { // while (currentIdx > 0)
-                parentIdx := div(sub(currentIdx, 1), heapBase) // parentIdx = (parentIdx - 1) / base
+                parentIdx := div(sub(parentIdx, 1), heapBase) // parentIdx = (parentIdx - 1) / base
 
                 let parent := sload(add(arrStart, parentIdx)) // parent = items[parentIdx]
                 switch gt(parent, key) // if parent > key
@@ -42,16 +47,16 @@ contract PriorityQueue {
                     return (0, 0) // return;
                 }
             }
-            sstore(add(arrStart, currentIdx), key) // items[currentIdx] = current
+            sstore(add(arrStart, currentIdx), key) // items[currentIdx] = key
         }
     }
 
     function takeMin() public returns (uint256) {
         if (items.length == 0) return 0;
+        uint8 heapBase = BASE;
 
         uint256 arrStart;
         uint256 key;
-        uint256 heapBase = base;
         assembly {
             mstore(0x0, items_slot)
             arrStart := keccak256(0, 32)
@@ -63,11 +68,10 @@ contract PriorityQueue {
         uint256 itemCount;
         uint256 current;
         assembly {
-            let lastIndex := sub(sload(items_slot), 1) // lastIndex = items.length - 1
-            current := sload(add(arrStart, lastIndex)) // current = items[lastIndex]
-            sstore(add(arrStart, lastIndex), 0) // items[lastIndex] = 0
-            sstore(items_slot, lastIndex) // items.length = lastIndex
-            itemCount := lastIndex
+            itemCount := sub(sload(items_slot), 1) // itemCount = items.length - 1
+            current := sload(add(arrStart, itemCount)) // current = items[itemCount]
+            sstore(add(arrStart, itemCount), 0) // items[itemCount] = 0
+            sstore(items_slot, itemCount) // items.length = itemCount
         }
 
         if (itemCount == 0) return data;
@@ -97,24 +101,19 @@ contract PriorityQueue {
                 }
             }
             if (smallestIdx == currentIdx) break;
-
             assembly {
                 sstore(add(arrStart, currentIdx), smallest) // items[currentIdx] = smallest
             }
             currentIdx = smallestIdx;
+            smallest = current;
         }
         assembly {
-            sstore(add(arrStart, smallestIdx), current) // items[smallestIdx] = current
+            sstore(add(arrStart, currentIdx), current) // items[currentIdx] = current
         }
         return data;
     }
 
-    function min() public view returns (uint256) {
-        if (items.length == 0) return 0;
-        return dataStore[items[0]];
-    }
-
-    function size() public view returns (uint256) {
-        return items.length;
+    function log(string message, uint256 logData) internal {
+        emit Log(message, logData);
     }
 }

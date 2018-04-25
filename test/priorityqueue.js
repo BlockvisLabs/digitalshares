@@ -11,7 +11,8 @@ const PriorityQueue = artifacts.require("../contracts/PriorityQueue.sol");
 contract.only('PriorityQueue', async (accounts) => {
     let contract;
 
-    before(async () => {
+    before(async function () {
+        this.timeout(1200000);
         contract = await PriorityQueue.new();
     });
 
@@ -85,21 +86,26 @@ contract.only('PriorityQueue', async (accounts) => {
         await contract.takeMin();
     });
 
-    it('should store many items', async () => {
+    it.only('should store many items', async function() {
+        this.timeout(1200000);
         let sum = 0;
         let i;
-        let count = 51;
+        let count = 2048;
+        console.log('Base is:', (await contract.BASE()).toNumber());
         for (i = 0; i < count; i++) {
             const tx = await contract.push(10000 - i, i * 3);
             sum += tx.receipt.gasUsed;
+            //expect(await contract.min()).to.be.bignumber.equal(i * 3);
         }
-        expect(await contract.min()).to.be.bignumber.equal((i - 1) * 3);
         const store = sum;
         console.log('Storage gas:', store);
         console.log('Average storage:', (store / count));
 
         const n = await contract.size();
-        for (i = 0; i < n; i++) {
+        expect(n).to.be.bignumber.equal(count);
+        for (i = n - 1; i >= 0; i--) {
+            // const min = await contract.min();
+            // expect(min).to.be.bignumber.equal(i * 3);
             const tx = await contract.takeMin();
             sum += tx.receipt.gasUsed;
         }
