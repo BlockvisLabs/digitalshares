@@ -27,11 +27,11 @@ contract DigitalSecuritiesToken is Ownable, StandardToken {
     /**
      * Raised when shareholder withdraws his profit
      */
-    event Paid(address indexed to, uint256 amount);
+    event Withdraw(address indexed to, uint256 amount);
     /**
      * Raised when the contract receives Ether
      */
-    event FundsReceived(address indexed from, uint256 amount);
+    event Deposit(address indexed from, uint256 amount);
 
     constructor(uint256 _totalSupply) public {
         totalSupply_ = _totalSupply;
@@ -52,17 +52,17 @@ contract DigitalSecuritiesToken is Ownable, StandardToken {
 
     function() public payable {
         if (msg.value > 0) {
-            emit FundsReceived(msg.sender, msg.value);
+            emit Deposit(msg.sender, msg.value);
         }
     }
 
-    function withdraw() external returns (bool) {
-        fixBalance(msg.sender);
-        uint256 amount = accounts[msg.sender].fixedBalance;
+    function withdraw(address benefeciary) external returns (bool) {
+        fixBalance(benefeciary);
+        uint256 amount = accounts[benefeciary].fixedBalance;
         reserved = reserved.sub(amount);
-        accounts[msg.sender].fixedBalance = 0;
-        msg.sender.transfer(amount);
-        emit Paid(msg.sender, amount);
+        accounts[benefeciary].fixedBalance = 0;
+        benefeciary.transfer(amount);
+        emit Withdraw(benefeciary, amount);
         return true;
     }
 

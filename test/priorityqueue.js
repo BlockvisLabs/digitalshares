@@ -8,7 +8,7 @@ const expect = chai.expect;
 
 const PriorityQueue = artifacts.require("../contracts/PriorityQueue.sol");
 
-contract.only('PriorityQueue', async (accounts) => {
+contract('PriorityQueue', async (accounts) => {
     let contract;
 
     before(async function () {
@@ -23,6 +23,11 @@ contract.only('PriorityQueue', async (accounts) => {
 
         expect(await contract.min()).to.be.bignumber.equal(100);
         await contract.takeMin();
+    });
+
+    it('refuses to put same key twice', async () => {
+        await contract.push(1, 100);
+        await expect(contract.push(1, 200)).eventually.rejected;
     });
 
     it('should store again data item', async () => {
@@ -86,16 +91,16 @@ contract.only('PriorityQueue', async (accounts) => {
         await contract.takeMin();
     });
 
-    it.only('should store many items', async function() {
+    it('should store many items', async function() {
         this.timeout(1200000);
         let sum = 0;
         let i;
-        let count = 2048;
+        let count = 1024;
         console.log('Base is:', (await contract.BASE()).toNumber());
         for (i = 0; i < count; i++) {
             const tx = await contract.push(10000 - i, i * 3);
             sum += tx.receipt.gasUsed;
-            //expect(await contract.min()).to.be.bignumber.equal(i * 3);
+            expect(await contract.min()).to.be.bignumber.equal(i * 3);
         }
         const store = sum;
         console.log('Storage gas:', store);
@@ -104,8 +109,7 @@ contract.only('PriorityQueue', async (accounts) => {
         const n = await contract.size();
         expect(n).to.be.bignumber.equal(count);
         for (i = n - 1; i >= 0; i--) {
-            // const min = await contract.min();
-            // expect(min).to.be.bignumber.equal(i * 3);
+            expect(await contract.min()).to.be.bignumber.equal(i * 3);
             const tx = await contract.takeMin();
             sum += tx.receipt.gasUsed;
         }
